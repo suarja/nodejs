@@ -6,17 +6,17 @@ import { AuthService } from '../../services/authService';
 
 export async function uploadS3Handler(req: Request, res: Response) {
   try {
+    console.log('🔐 S3 upload request received');
     // Step 1: Authenticate user using AuthService
     const authHeader = req.headers.authorization;
     const { user, errorResponse: authError } = await AuthService.verifyUser(
       authHeader
     );
+    console.log('🔐 User authenticated for S3 upload:', user);
 
     if (authError) {
       return res.status(authError.status).json(authError);
     }
-
-    console.log('🔐 User authenticated for S3 upload:', user.id);
 
     const { fileName, fileType } = req.body;
 

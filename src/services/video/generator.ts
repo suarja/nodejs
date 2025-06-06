@@ -8,12 +8,7 @@ import {
   VideoGenerationPayload,
   VideoValidationService,
 } from './validation';
-import {
-  VideoGenerationResult,
-  VideoGenerationError,
-  ValidatedVideo,
-} from '../../types/video';
-import { successResponse, errorResponse } from '../../utils/api/responses';
+import { VideoGenerationResult, ValidatedVideo } from '../../types/video';
 
 /**
  * Enhanced video generation service with async background processing
@@ -314,7 +309,6 @@ export class VideoGeneratorService {
     try {
       const updateData: any = {
         status,
-        updated_at: new Date().toISOString(),
       };
 
       if (status === 'processing') {
@@ -358,7 +352,6 @@ export class VideoGeneratorService {
         .update({
           status: results.status,
           completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           result_data: {
             scriptId: results.scriptId,
             renderId: results.renderId,
