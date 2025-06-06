@@ -1,14 +1,29 @@
 {
   "name": "nodejs-app",
   "version": "1.0.0",
-  "description": "A minimal Node.js web application.",
-  "main": "app.js",
+  "description": "A Node.js web application with TypeScript for video generation API.",
+  "main": "dist/app.js",
   "author": "alphasec",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.50.0",
+    "dotenv": "^16.5.0",
     "express": "^4.19.2"
   },
+  "devDependencies": {
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
   "scripts": {
-    "start": "node app.js"
+    "start": "node dist/app.js",
+    "build": "tsc",
+    "dev": "nodemon --exec ts-node src/app.ts",
+    "dev:watch": "nodemon --watch src --ext ts --exec ts-node src/app.ts",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "postbuild": "cp -r views public dist/ || true"
   }
 }
