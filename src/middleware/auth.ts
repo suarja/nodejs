@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../config/supabase';
+import { AuthService } from '../services/authService';
 
 // Extend Express Request type to include user
 declare global {
@@ -22,28 +22,11 @@ export async function authenticateUser(
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({
-        success: false,
-        error: 'Missing or invalid authorization header',
-      });
-      return;
-    }
+    // Use AuthService to verify user (matches mobile app implementation)
+    const { user, errorResponse } = await AuthService.verifyUser(authHeader);
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-
-    // Verify token with Supabase
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      console.error('❌ Authentication failed:', error);
-      res.status(401).json({
-        success: false,
-        error: 'Invalid token',
-      });
+    if (errorResponse) {
+      res.status(errorResponse.status).json(errorResponse);
       return;
     }
 
@@ -74,22 +57,16 @@ export async function optionalAuth(
   try {
     const authHeader = req.headers.authorization;
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    // Use AuthService to verify user if header is present
+    const { user, errorResponse } = await AuthService.verifyUser(authHeader);
 
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(token);
-
-      if (!error && user) {
-        req.user = {
-          id: user.id,
-          email: user.email,
-          ...user.user_metadata,
-        };
-        console.log(`🔐 Optional auth successful: ${user.email} (${user.id})`);
-      }
+    if (!errorResponse && user) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        ...user.user_metadata,
+      };
+      console.log(`🔐 Optional auth successful: ${user.email} (${user.id})`);
     }
 
     next();

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { supabase } from '../../config/supabase';
+import { AuthService } from '../../services/authService';
 import { AgentService } from '../../services/agentService';
 import {
   VideoGenerationRequest,
@@ -14,12 +15,17 @@ export async function generateVideoHandler(req: Request, res: Response) {
   try {
     console.log('🎬 Video generation request received');
 
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required',
-      } as ApiResponse);
+    // Step 1: Authenticate user using AuthService (matching mobile app)
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await AuthService.verifyUser(
+      authHeader
+    );
+
+    if (authError) {
+      return res.status(authError.status).json(authError);
     }
+
+    console.log('🔐 User authenticated:', user.id);
 
     const {
       prompt,
@@ -42,7 +48,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('user_id', req.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (profileError || !profile) {
@@ -60,13 +66,13 @@ export async function generateVideoHandler(req: Request, res: Response) {
       videoLanguage,
       captionPlacement,
       captionLines,
-      userId: req.user.id,
+      userId: user.id,
     };
 
     const { data: videoRequest, error: insertError } = await supabase
       .from('video_requests')
       .insert({
-        user_id: req.user.id,
+        user_id: user.id,
         status: 'queued',
         payload: requestPayload,
       })
@@ -125,18 +131,21 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required',
-      } as ApiResponse);
+    // Step 1: Authenticate user using AuthService
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await AuthService.verifyUser(
+      authHeader
+    );
+
+    if (authError) {
+      return res.status(authError.status).json(authError);
     }
 
     const { data: videoRequest, error } = await supabase
       .from('video_requests')
       .select('*')
       .eq('id', id)
-      .eq('user_id', req.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (error || !videoRequest) {

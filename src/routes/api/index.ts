@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateUser } from '../../middleware/auth';
+import { AuthService } from '../../services/authService';
 import { uploadS3Handler } from './s3Upload';
 import { generateVideoHandler, getVideoStatusHandler } from './videos';
 
@@ -14,21 +14,24 @@ apiRouter.get('/health', (req, res) => {
   });
 });
 
-// S3 upload endpoint (requires authentication)
-apiRouter.post('/s3-upload', authenticateUser, uploadS3Handler);
+// S3 upload endpoint (auth handled in the handler)
+apiRouter.post('/s3-upload', uploadS3Handler);
 
-// Video generation endpoints (requires authentication)
-apiRouter.post('/videos/generate', authenticateUser, generateVideoHandler);
-apiRouter.get('/videos/status/:id', authenticateUser, getVideoStatusHandler);
+// Video generation endpoints (auth handled in the handlers)
+apiRouter.post('/videos/generate', generateVideoHandler);
+apiRouter.get('/videos/status/:id', getVideoStatusHandler);
 
 // List video requests endpoint
-apiRouter.get('/videos', authenticateUser, async (req, res) => {
+apiRouter.get('/videos', async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required',
-      });
+    // Step 1: Authenticate user using AuthService
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await AuthService.verifyUser(
+      authHeader
+    );
+
+    if (authError) {
+      return res.status(authError.status).json(authError);
     }
 
     // Get the user's video requests (latest first)
@@ -37,7 +40,7 @@ apiRouter.get('/videos', authenticateUser, async (req, res) => {
     ).supabase
       .from('video_requests')
       .select('id, status, created_at, payload, result_data, error_message')
-      .eq('user_id', req.user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
 
