@@ -4,17 +4,22 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-export const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+export const MODELS = {
+  o3: 'o3-2025-04-16',
+  'o4-mini': 'o4-mini-2025-04-16',
+  '4.1': 'gpt-4.1-2025-04-14',
+  '4.1-nano': 'gpt-4.1-nano-2025-04-14',
+};
 
-export function createOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
+const MODEL = MODELS['o4-mini'];
 
-  if (!apiKey) {
-    throw new Error('Missing OPENAI_API_KEY environment variable');
+export function createOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY environment variable is not set');
   }
 
   return new OpenAI({
-    apiKey: apiKey,
+    apiKey: process.env.OPENAI_API_KEY,
   });
 }
 
@@ -42,3 +47,5 @@ export async function testOpenAIConnection(): Promise<boolean> {
     return false;
   }
 }
+
+export { MODEL };
