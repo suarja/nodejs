@@ -1,129 +1,138 @@
 import { Request, Response } from 'express';
 import { supabase } from '../../config/supabase';
 import { AuthService } from '../../services/authService';
-import { AgentService } from '../../services/agentService';
+import { VideoValidationService } from '../../services/video/validation';
+import { VideoGeneratorService } from '../../services/video/generator';
+import { VideoStatusResponse, ApiResponse } from '../../types/video';
 import {
-  VideoGenerationRequest,
-  VideoGenerationResponse,
-  VideoStatusResponse,
-  ApiResponse,
-} from '../../types/video';
-import { EditorialProfile } from '../../types/agents';
+  successResponseExpress,
+  errorResponseExpress,
+  HttpStatus,
+} from '../../utils/api/responses';
 
-// Generate video endpoint
+/**
+ * Video generation API controller matching the original mobile app
+ *
+ * Key difference: This responds immediately after creating the video request,
+ * then processes in the background
+ */
 export async function generateVideoHandler(req: Request, res: Response) {
-  try {
-    console.log('🎬 Video generation request received');
+  console.log('🎬 Starting video generation request...');
 
-    // Step 1: Authenticate user using AuthService (matching mobile app)
+  try {
+    // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
     const { user, errorResponse: authError } = await AuthService.verifyUser(
       authHeader
     );
 
     if (authError) {
-      return res.status(authError.status).json(authError);
+      return errorResponseExpress(res, authError.error, authError.status);
     }
 
     console.log('🔐 User authenticated:', user.id);
 
-    const {
-      prompt,
-      systemPrompt = '',
-      videoUrl,
-      videoLanguage = 'en',
-      captionPlacement = 'bottom',
-      captionLines = 3,
-    }: VideoGenerationRequest = req.body;
-
-    // Validate required fields
-    if (!prompt) {
-      return res.status(400).json({
-        success: false,
-        error: 'Prompt is required',
-      } as ApiResponse);
+    // Step 2: Parse and validate request
+    let requestBody;
+    try {
+      requestBody = req.body;
+    } catch (error) {
+      console.error('❌ Invalid JSON in request body:', error);
+      return errorResponseExpress(
+        res,
+        'Invalid JSON in request body',
+        HttpStatus.BAD_REQUEST
+      );
     }
 
-    // Get user's editorial profile
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return res.status(400).json({
-        success: false,
-        error: 'Editorial profile not found. Please complete onboarding first.',
-      } as ApiResponse);
+    // Step 3: Validate request body using the proper validation service
+    const validationResult =
+      VideoValidationService.validateRequest(requestBody);
+    if (!validationResult.success) {
+      return errorResponseExpress(
+        res,
+        validationResult.error.message,
+        validationResult.error.status,
+        validationResult.error.details
+      );
     }
 
-    // Create video request in queue
-    const requestPayload = {
-      prompt,
-      systemPrompt,
-      videoUrl,
-      videoLanguage,
-      captionPlacement,
-      captionLines,
-      userId: user.id,
-    };
+    // Step 4: Generate video using the proper generator service
+    const videoGenerator = new VideoGeneratorService(user);
+    const result = await videoGenerator.generateVideo(validationResult.payload);
 
-    const { data: videoRequest, error: insertError } = await supabase
-      .from('video_requests')
-      .insert({
-        user_id: user.id,
-        status: 'queued',
-        payload: requestPayload,
-      })
-      .select()
-      .single();
+    console.log('✅ Video generation process initiated successfully');
 
-    if (insertError || !videoRequest) {
-      console.error('❌ Failed to create video request:', insertError);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to create video request',
-      } as ApiResponse);
-    }
-
-    console.log(`✅ Video request queued: ${videoRequest.id}`);
-
-    // Start processing in the background (fire and forget)
-    processVideoRequest(videoRequest.id, requestPayload, profile).catch(
-      (error) => {
-        console.error('❌ Background video processing failed:', error);
-      }
+    // Step 5: Return success response immediately (this is the key difference!)
+    return successResponseExpress(
+      res,
+      {
+        requestId: result.requestId,
+        scriptId: result.scriptId,
+        status: result.status,
+        estimatedCompletionTime: result.estimatedCompletionTime,
+      },
+      HttpStatus.CREATED
     );
+  } catch (error: any) {
+    // Log error with stack trace for debugging
+    console.error('❌ Error in video generation:', error);
 
-    // Get queue position
-    const { count: queuePosition } = await supabase
-      .from('video_requests')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'queued')
-      .lt('created_at', videoRequest.created_at);
+    // Determine appropriate status code based on error type
+    const statusCode = determineErrorStatusCode(error);
 
-    const response: VideoGenerationResponse = {
-      requestId: videoRequest.id,
-      status: 'queued',
-      queuePosition: (queuePosition || 0) + 1,
-      estimatedWaitTime: `${Math.max(
-        1,
-        Math.ceil((queuePosition || 0) * 0.5)
-      )} minutes`,
-    };
-
-    return res.status(201).json({
-      success: true,
-      data: response,
-    } as ApiResponse<VideoGenerationResponse>);
-  } catch (error) {
-    console.error('❌ Video generation error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    } as ApiResponse);
+    // Return error response
+    return errorResponseExpress(
+      res,
+      error.message || 'Failed to process video request',
+      statusCode,
+      process.env.NODE_ENV === 'development'
+        ? { stack: error.stack }
+        : undefined
+    );
   }
+}
+
+/**
+ * Determines the appropriate HTTP status code based on error type
+ */
+function determineErrorStatusCode(error: any): number {
+  // Database errors
+  if (
+    error.code &&
+    (error.code.startsWith('22') || // Data exception
+      error.code.startsWith('23') || // Integrity constraint violation
+      error.code === 'PGRST') // PostgREST error
+  ) {
+    return HttpStatus.BAD_REQUEST;
+  }
+
+  // Authentication/authorization errors
+  if (
+    error.message &&
+    (error.message.includes('auth') ||
+      error.message.includes('token') ||
+      error.message.includes('unauthorized') ||
+      error.message.includes('permission'))
+  ) {
+    return HttpStatus.UNAUTHORIZED;
+  }
+
+  // Missing resources
+  if (
+    error.message &&
+    (error.message.includes('not found') || error.message.includes('missing'))
+  ) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  // External API errors (Creatomate)
+  if (error.message && error.message.includes('Creatomate')) {
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  // Default to internal server error
+  return HttpStatus.INTERNAL_SERVER_ERROR;
 }
 
 // Get video status endpoint
@@ -138,7 +147,7 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
     );
 
     if (authError) {
-      return res.status(authError.status).json(authError);
+      return errorResponseExpress(res, authError.error, authError.status);
     }
 
     const { data: videoRequest, error } = await supabase
@@ -149,10 +158,11 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
       .single();
 
     if (error || !videoRequest) {
-      return res.status(404).json({
-        success: false,
-        error: 'Video request not found',
-      } as ApiResponse);
+      return errorResponseExpress(
+        res,
+        'Video request not found',
+        HttpStatus.NOT_FOUND
+      );
     }
 
     // Get queue position if still queued
@@ -184,83 +194,13 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
       result: videoRequest.result_data || undefined,
     };
 
-    return res.status(200).json({
-      success: true,
-      data: response,
-    } as ApiResponse<VideoStatusResponse>);
+    return successResponseExpress(res, response);
   } catch (error) {
     console.error('❌ Video status error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    } as ApiResponse);
-  }
-}
-
-// Background processing function
-async function processVideoRequest(
-  requestId: string,
-  payload: VideoGenerationRequest,
-  profile: any
-) {
-  try {
-    console.log(`🎭 Processing video request: ${requestId}`);
-
-    // Update status to processing
-    await supabase
-      .from('video_requests')
-      .update({
-        status: 'processing',
-        processing_started_at: new Date().toISOString(),
-      })
-      .eq('id', requestId);
-
-    // Get agent service
-    const agentService = AgentService.getInstance();
-
-    // Convert profile to EditorialProfile type
-    const editorialProfile: EditorialProfile = {
-      persona_description: profile.persona_description || '',
-      tone_of_voice: profile.tone_of_voice || '',
-      audience: profile.audience || '',
-      style_notes: profile.style_notes || '',
-      examples: profile.examples || '',
-    };
-
-    // Generate and review script
-    const result = await agentService.generateAndReviewScript({
-      prompt: payload.prompt,
-      systemPrompt: payload.systemPrompt || '',
-      editorialProfile,
-    });
-
-    console.log(`✅ Script generated for request: ${requestId}`);
-
-    // Update request with completed status and result
-    await supabase
-      .from('video_requests')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        result_data: {
-          script: result.review.reviewedScript,
-          generation: result.generation,
-          review: result.review,
-        },
-      })
-      .eq('id', requestId);
-
-    console.log(`✅ Video request completed: ${requestId}`);
-  } catch (error) {
-    console.error(`❌ Processing failed for request ${requestId}:`, error);
-
-    // Update request with failed status
-    await supabase
-      .from('video_requests')
-      .update({
-        status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-      })
-      .eq('id', requestId);
+    return errorResponseExpress(
+      res,
+      'Internal server error',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
 }
