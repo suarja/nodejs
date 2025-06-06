@@ -1,7 +1,7 @@
 import {
   VideoType,
   CaptionConfiguration,
-  EditorialProfile,
+  EditorialProfile as VideoEditorialProfile,
   VideoGenerationRequest,
   ValidatedVideo,
   VideoGenerationError,
@@ -9,6 +9,9 @@ import {
   isValidCaptionConfig,
   isValidEditorialProfile,
 } from '../../types/video';
+
+// Export EditorialProfile for use in other services
+export type EditorialProfile = VideoEditorialProfile;
 import { errorResponseExpress, HttpStatus } from '../../utils/api/responses';
 
 /**
@@ -16,7 +19,7 @@ import { errorResponseExpress, HttpStatus } from '../../utils/api/responses';
  */
 export type ValidationResult =
   | { success: true; payload: VideoGenerationRequest }
-  | { success: false; error: any; details: ValidationErrorDetails };
+  | { success: false; error: any; details?: ValidationErrorDetails };
 
 /**
  * Detailed validation error information
@@ -108,7 +111,7 @@ export class VideoValidationService {
             status: HttpStatus.BAD_REQUEST,
             details: { errors },
           },
-          details: errors[0], // Return first error for compatibility
+          details: errors.length > 0 ? errors[0] : undefined, // Return first error for compatibility
         };
       }
 
