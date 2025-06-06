@@ -1,0 +1,96 @@
+/**
+ * Simplified caption configuration type for server use
+ */
+interface CaptionConfiguration {
+  presetId?: string;
+  placement?: 'top' | 'middle' | 'bottom';
+  lines?: number;
+}
+
+/**
+ * Converts a CaptionConfiguration to the Creatomate JSON structure
+ * @param config The caption configuration from the UI
+ * @returns A JSON object in the format expected by Creatomate
+ */
+export function convertCaptionConfigToCreatomate(
+  config: CaptionConfiguration | null | undefined
+): Record<string, any> {
+  if (!config || !config.presetId) {
+    // Return default structure if no config provided
+    return {
+      elements: [
+        {
+          id: 'caption-1',
+          name: 'Subtitle-2',
+          type: 'text',
+          track: 2,
+          time: 0,
+          duration: null,
+          x: '50%',
+          y: '90%',
+          width: '86.66%',
+          height: '100.71%',
+          font_family: 'Montserrat',
+          font_weight: '700',
+          font_size: '40px',
+          text_transform: 'uppercase',
+          fill_color: '#FFFFFF',
+          stroke_color: '#000000',
+          stroke_width: '8px',
+          shadow_color: '#000000',
+          shadow_blur: '2px',
+          shadow_x: '2px',
+          shadow_y: '2px',
+          transcript_effect: 'karaoke',
+          transcript_placement: 'bottom',
+          transcript_maximum_length: 14,
+          highlight_color: '#04f827',
+        },
+      ],
+    };
+  }
+
+  // Simple preset mapping for server use
+  const placement = config.placement || 'bottom';
+  const lines = config.lines || 2;
+
+  // Map placement to y position
+  let yPosition = '90%'; // Default bottom
+  if (placement === 'top') {
+    yPosition = '10%';
+  } else if (placement === 'middle') {
+    yPosition = '50%';
+  }
+
+  return {
+    elements: [
+      {
+        id: 'caption-1',
+        name: 'Subtitle-2',
+        type: 'text',
+        track: 2,
+        time: 0,
+        duration: null,
+        x: '50%',
+        y: yPosition,
+        width: '86.66%',
+        height: '100.71%',
+        font_family: 'Montserrat',
+        font_weight: '700',
+        font_size: '40px',
+        text_transform: 'uppercase',
+        fill_color: '#FFFFFF',
+        stroke_color: '#000000',
+        stroke_width: '8px',
+        shadow_color: '#000000',
+        shadow_blur: '2px',
+        shadow_x: '2px',
+        shadow_y: '2px',
+        transcript_effect: 'karaoke',
+        transcript_placement: placement,
+        transcript_maximum_length: lines === 1 ? 14 : 10,
+        highlight_color: '#04f827',
+      },
+    ],
+  };
+}

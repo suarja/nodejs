@@ -2,6 +2,8 @@ import express from 'express';
 import { AuthService } from '../../services/authService';
 import { uploadS3Handler } from './s3Upload';
 import { generateVideoHandler, getVideoStatusHandler } from './videos';
+import promptsRouter from './prompts';
+import webhooksRouter from './webhooks';
 
 const apiRouter = express.Router();
 
@@ -20,6 +22,12 @@ apiRouter.post('/s3-upload', uploadS3Handler);
 // Video generation endpoints (auth handled in the handlers)
 apiRouter.post('/videos/generate', generateVideoHandler);
 apiRouter.get('/videos/status/:id', getVideoStatusHandler);
+
+// Prompt enhancement endpoints
+apiRouter.use('/prompts', promptsRouter);
+
+// Webhook endpoints
+apiRouter.use('/webhooks', webhooksRouter);
 
 // List video requests endpoint
 apiRouter.get('/videos', async (req, res) => {
