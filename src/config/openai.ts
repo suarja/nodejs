@@ -27,7 +27,7 @@ export async function testOpenAIConnection(): Promise<boolean> {
     const response = await client.chat.completions.create({
       model: MODEL,
       messages: [{ role: 'user', content: 'Hello' }],
-      max_tokens: 5,
+      max_completion_tokens: 5,
     });
 
     if (response.choices && response.choices.length > 0) {
