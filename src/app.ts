@@ -3,6 +3,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import indexRouter from './routes/index';
 import { testSupabaseConnection } from './config/supabase';
+import { AgentService } from './services/agentService';
 
 // Load environment variables
 dotenv.config();
@@ -24,15 +25,27 @@ app.use((req, res, next) => {
   res.status(404).sendFile(path.join(__dirname, '../views', '404.html'));
 });
 
-// Start server with Supabase connection test
+// Start server with all service connection tests
 async function startServer() {
   try {
-    console.log('🔧 Testing Supabase connection...');
+    console.log('🔧 Testing service connections...');
+
+    // Test Supabase connection
     const isSupabaseConnected = await testSupabaseConnection();
+
+    // Test Agent services
+    const agentService = AgentService.getInstance();
+    const areAgentsConnected = await agentService.testConnections();
 
     if (!isSupabaseConnected) {
       console.warn(
         '⚠️  Supabase connection failed, but server will continue...'
+      );
+    }
+
+    if (!areAgentsConnected) {
+      console.warn(
+        '⚠️  Agent services connection failed, but server will continue...'
       );
     }
 
@@ -43,6 +56,12 @@ async function startServer() {
         `🔌 Supabase: ${
           isSupabaseConnected ? '✅ Connected' : '❌ Disconnected'
         }`
+      );
+      console.log(
+        `🤖 Agents: ${areAgentsConnected ? '✅ Connected' : '❌ Disconnected'}`
+      );
+      console.log(
+        '🎯 TypeScript server ready for video generation API migration'
       );
     });
   } catch (error) {
