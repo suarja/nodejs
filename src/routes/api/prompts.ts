@@ -47,6 +47,8 @@ router.post('/enhance', async (req: Request, res: Response) => {
       });
     }
 
+    console.log('🔄 Prompt template:', promptTemplate);
+
     // Use OpenAI to enhance the prompt
     const openai = createOpenAIClient();
     const completion = await openai.chat.completions.create({
@@ -66,7 +68,7 @@ router.post('/enhance', async (req: Request, res: Response) => {
     });
 
     const enhancedPrompt = completion.choices[0]?.message?.content;
-
+    console.log('🔄 Enhanced prompt:', enhancedPrompt);
     if (!enhancedPrompt) {
       return res.status(500).json({
         error: 'Failed to enhance prompt',

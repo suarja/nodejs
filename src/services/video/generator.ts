@@ -12,7 +12,12 @@ import {
   VideoValidationService,
 } from './validation';
 import { VideoGenerationResult, ValidatedVideo } from '../../types/video';
-
+export enum VideoRequestStatus {
+  QUEUED = 'queued',
+  RENDERING = 'rendering',
+  COMPLETED = 'done',
+  FAILED = 'error',
+}
 /**
  * Enhanced video generation service with async background processing
  *
@@ -54,15 +59,7 @@ export class VideoGeneratorService {
     const startTime = Date.now();
 
     try {
-      const {
-        prompt,
-        systemPrompt,
-        selectedVideos,
-        editorialProfile,
-        voiceId,
-        captionConfig,
-        outputLanguage,
-      } = payload;
+      const { editorialProfile } = payload;
 
       console.log(`🎬 Starting video generation for user ${this.user.id}`);
 
@@ -96,7 +93,7 @@ export class VideoGeneratorService {
       return {
         requestId: videoRequest.id,
         scriptId: '', // Will be populated during background processing
-        status: 'queued',
+        status: VideoRequestStatus.QUEUED,
         estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
       };
     } catch (error) {
@@ -143,7 +140,10 @@ export class VideoGeneratorService {
       console.log(`🔄 Starting background processing for request ${requestId}`);
 
       // Update status to processing
-      await this.updateVideoRequestStatus(requestId, 'processing');
+      await this.updateVideoRequestStatus(
+        requestId,
+        VideoRequestStatus.RENDERING
+      );
 
       const {
         prompt,
@@ -309,7 +309,7 @@ export class VideoGeneratorService {
    */
   private async updateVideoRequestStatus(
     requestId: string,
-    status: 'queued' | 'processing' | 'completed' | 'failed',
+    status: VideoRequestStatus,
     errorMessage?: string
   ): Promise<void> {
     try {
@@ -318,12 +318,13 @@ export class VideoGeneratorService {
         updated_at: new Date().toISOString(),
       };
 
-      if (status === 'processing') {
+      if (status === VideoRequestStatus.RENDERING) {
         updateData.processing_started_at = new Date().toISOString();
-      } else if (status === 'completed') {
+      } else if (status === VideoRequestStatus.COMPLETED) {
         updateData.completed_at = new Date().toISOString();
-      } else if (status === 'failed' && errorMessage) {
-        updateData.error_message = errorMessage;
+      } else if (status === VideoRequestStatus.FAILED && errorMessage) {
+        console.warn('Failed to update video request status:', errorMessage);
+        // updateData.error_message = errorMessage || 'Unknown error';
       }
 
       const { error } = await supabase
@@ -346,7 +347,7 @@ export class VideoGeneratorService {
   private async updateVideoRequestWithResults(
     requestId: string,
     results: {
-      status: string;
+      status: 'done' | 'rendering' | 'queued' | 'error';
       scriptId: string;
       renderId: string;
       script: string;
@@ -595,15 +596,15 @@ export class VideoGeneratorService {
       // Store training data for ML improvements
       const trainingData = {
         user_id: this.user.id,
-        video_request_id: videoRequestId,
-        prompt: prompt,
+        raw_prompt: prompt,
         generated_script: script,
-        template_data: template,
+        creatomate_template: template,
+        video_request_id: videoRequestId,
         created_at: new Date().toISOString(),
       };
 
       const { error: trainingError } = await supabase
-        .from('training_data')
+        .from('rl_training_data')
         .insert(trainingData);
 
       if (trainingError) {

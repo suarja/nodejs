@@ -4,7 +4,7 @@
 interface CaptionConfiguration {
   presetId?: string;
   placement?: 'top' | 'middle' | 'bottom';
-  lines?: number;
+  highlightColor?: string;
 }
 
 /**
@@ -52,12 +52,11 @@ export function convertCaptionConfigToCreatomate(
 
   // Simple preset mapping for server use
   const placement = config.placement || 'bottom';
-  const lines = config.lines || 2;
 
   // Map placement to y position
-  let yPosition = '90%'; // Default bottom
+  let yPosition = '80%'; // Default bottom
   if (placement === 'top') {
-    yPosition = '10%';
+    yPosition = '20%';
   } else if (placement === 'middle') {
     yPosition = '50%';
   }
@@ -87,9 +86,9 @@ export function convertCaptionConfigToCreatomate(
         shadow_x: '2px',
         shadow_y: '2px',
         transcript_effect: 'karaoke',
-        transcript_placement: placement,
-        transcript_maximum_length: lines === 1 ? 14 : 10,
-        highlight_color: '#04f827',
+        transcript_placement: 'animate',
+        transcript_maximum_length: 25,
+        highlight_color: config.highlightColor || '#04f827',
       },
     ],
   };

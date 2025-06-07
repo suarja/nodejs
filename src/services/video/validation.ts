@@ -47,7 +47,7 @@ export class VideoValidationService {
   ] as const;
 
   private static readonly MAX_PROMPT_LENGTH = 2000;
-  private static readonly MAX_SYSTEM_PROMPT_LENGTH = 1000;
+  private static readonly MAX_SYSTEM_PROMPT_LENGTH = 2000;
   private static readonly MIN_VIDEOS = 1;
   private static readonly MAX_VIDEOS = 10;
 
