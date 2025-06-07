@@ -1,39 +1,30 @@
 import OpenAI from 'openai';
-import { createOpenAIClient, MODEL } from '../config/openai';
-import {
-  EditorialProfile,
-  ScriptGenerationRequest,
-  ScriptGenerationResponse,
-  AgentConfig,
-} from '../types/agents';
+import { createOpenAIClient } from '../config/openai';
 
 export class ScriptGenerator {
   private openai: OpenAI;
   private model: string;
   private static instance: ScriptGenerator;
 
-  private constructor(config: AgentConfig) {
+  private constructor(model: string) {
     this.openai = createOpenAIClient();
-    this.model = config.model;
+    this.model = model;
   }
 
-  public static getInstance(
-    config: AgentConfig = { model: MODEL }
-  ): ScriptGenerator {
+  public static getInstance(model: string): ScriptGenerator {
     if (!ScriptGenerator.instance) {
-      ScriptGenerator.instance = new ScriptGenerator(config);
+      ScriptGenerator.instance = new ScriptGenerator(model);
     }
     return ScriptGenerator.instance;
   }
 
   async generate(
-    request: ScriptGenerationRequest
-  ): Promise<ScriptGenerationResponse> {
+    prompt: string,
+    editorialProfile: any,
+    systemPrompt: string
+  ): Promise<string> {
     try {
-      console.log(
-        '🎬 Generating script with profile:',
-        request.editorialProfile
-      );
+      console.log('Generating script with profile:', editorialProfile);
 
       const completion = await this.openai.chat.completions.create({
         model: this.model,
@@ -58,11 +49,13 @@ STRUCTURE:
 3. Punch/Wrap (1-2 lines): Strong conclusion
 
 Editorial Profile:
-- Persona: ${request.editorialProfile.persona_description}
-- Tone: ${request.editorialProfile.tone_of_voice}
-- Audience: ${request.editorialProfile.audience}
-- Style: ${request.editorialProfile.style_notes}
-- Examples: ${request.editorialProfile.examples || 'None provided'}
+- Persona: ${editorialProfile.persona_description}
+- Tone: ${editorialProfile.tone_of_voice}
+- Audience: ${editorialProfile.audience}
+- Style: ${editorialProfile.style_notes}
+- Examples : ${editorialProfile.examples}
+
+
 
 REQUIREMENTS:
 - Duration: 30-60 seconds when spoken
@@ -84,10 +77,10 @@ Return only the final script without any additional context or formatting.`,
             role: 'user',
             content: `
             System Prompt from the user:
-            ${request.systemPrompt}
+            ${systemPrompt}
 
             User Prompt:
-            ${request.prompt}
+            ${prompt}
             `,
           },
         ],
@@ -104,25 +97,15 @@ Return only the final script without any additional context or formatting.`,
 
       if (estimatedDuration < 30 || estimatedDuration > 60) {
         console.warn(
-          `⚠️ Script duration warning: Estimated ${estimatedDuration.toFixed(
+          `Script duration warning: Estimated ${estimatedDuration.toFixed(
             1
           )} seconds`
         );
       }
 
-      console.log(
-        `✅ Script generated: ${wordCount} words, ~${estimatedDuration.toFixed(
-          1
-        )}s`
-      );
-
-      return {
-        script,
-        estimatedDuration,
-        wordCount,
-      };
+      return script;
     } catch (error) {
-      console.error('❌ Error generating script:', error);
+      console.error('Error generating script:', error);
       throw new Error(
         `Failed to generate script: ${
           error instanceof Error ? error.message : 'Unknown error'
@@ -131,12 +114,9 @@ Return only the final script without any additional context or formatting.`,
     }
   }
 
-  async review(
-    script: string,
-    editorialProfile: EditorialProfile
-  ): Promise<string> {
+  async review(script: string, editorialProfile: any): Promise<string> {
     try {
-      console.log('🔍 Reviewing script...');
+      console.log('Reviewing script...');
 
       const completion = await this.openai.chat.completions.create({
         model: this.model,
@@ -226,10 +206,9 @@ Editorial Profile:
         throw new Error('Failed to review script: Empty response');
       }
 
-      console.log('✅ Script reviewed successfully');
       return reviewedScript;
     } catch (error) {
-      console.error('❌ Error reviewing script:', error);
+      console.error('Error reviewing script:', error);
       throw new Error(
         `Failed to review script: ${
           error instanceof Error ? error.message : 'Unknown error'

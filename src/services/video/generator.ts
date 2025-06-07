@@ -3,6 +3,7 @@ import { supabase } from '../../config/supabase';
 import { ScriptGenerator } from '../scriptGenerator';
 import { ScriptReviewer } from '../scriptReviewer';
 import { CreatomateBuilder } from '../creatomateBuilder';
+import { MODELS } from '../../config/openai';
 import { PromptService } from '../promptService';
 import { convertCaptionConfigToCreatomate } from '../../utils/video/caption-converter';
 import {
@@ -35,9 +36,9 @@ export class VideoGeneratorService {
    */
   constructor(user: User) {
     this.user = user;
-    this.scriptGenerator = ScriptGenerator.getInstance();
-    this.scriptReviewer = ScriptReviewer.getInstance();
-    this.creatomateBuilder = CreatomateBuilder.getInstance();
+    this.scriptGenerator = ScriptGenerator.getInstance(MODELS['o4-mini']);
+    this.scriptReviewer = ScriptReviewer.getInstance(MODELS['o4-mini']);
+    this.creatomateBuilder = CreatomateBuilder.getInstance(MODELS['4.1']);
   }
 
   /**
@@ -387,72 +388,65 @@ export class VideoGeneratorService {
     requestId: string
   ): Promise<{ scriptId: string; reviewedScript: string }> {
     try {
-      console.log(`🔄 Generating script for request ${requestId}...`);
-
-      // Step 1: Generate initial script using ScriptGenerator
-      const scriptResult = await this.scriptGenerator.generate({
+      console.log('🤖 Generating script...');
+      const generatedScript = await this.scriptGenerator.generate(
         prompt,
-        systemPrompt,
         editorialProfile,
-      });
+        systemPrompt
+      );
+      console.log('✅ Script generated successfully');
 
-      console.log(`📝 Initial script generated for ${requestId}`);
-
-      // Step 2: Review script using ScriptReviewer
-      const reviewResult = await this.scriptReviewer.review({
-        script: scriptResult.script,
+      console.log('🔍 Reviewing script...');
+      const reviewedScript = await this.scriptReviewer.review(
+        generatedScript,
         editorialProfile,
-        userSystemPrompt: systemPrompt,
-      });
+        `System Prompt from the user:
+        ${systemPrompt}
 
-      console.log(`✅ Script reviewed for ${requestId}`);
+        User Prompt:
+        ${prompt}
+        
+        Output Language: ${outputLanguage}
+        `
+      );
+      console.log('✅ Script reviewed successfully');
 
-      // Step 3: Save script to database
-      const { data: savedScript, error: scriptError } = await supabase
+      console.log('💾 Creating script record...');
+      const { data: script, error: scriptError } = await supabase
         .from('scripts')
         .insert({
           user_id: this.user.id,
-          video_request_id: requestId,
-          original_script: scriptResult.script,
-          reviewed_script: reviewResult.reviewedScript,
-          prompt: prompt,
-          system_prompt: systemPrompt,
-          editorial_profile: editorialProfile,
+          raw_prompt: prompt,
+          generated_script: reviewedScript,
+          status: 'validated',
           output_language: outputLanguage,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         })
-        .select('id')
+        .select()
         .single();
 
-      if (scriptError || !savedScript) {
-        console.error(
-          `❌ Failed to save script for ${requestId}:`,
-          scriptError
-        );
-        throw new Error(
-          `Failed to save script: ${scriptError?.message || 'Unknown error'}`
+      if (scriptError) {
+        throw VideoValidationService.createError(
+          'Failed to save script to database',
+          'SCRIPT_SAVE_ERROR',
+          { originalError: scriptError },
+          true,
+          'Failed to save the generated script. Please try again.'
         );
       }
 
-      console.log(
-        `💾 Script saved with ID ${savedScript.id} for request ${requestId}`
-      );
-
-      return {
-        scriptId: savedScript.id,
-        reviewedScript: reviewResult.reviewedScript,
-      };
+      console.log(`✅ Script created: ${script.id}`);
+      return { scriptId: script.id, reviewedScript };
     } catch (error) {
-      console.error(`❌ Script generation failed for ${requestId}:`, error);
+      if (error instanceof Error && 'code' in error) {
+        throw error; // Re-throw VideoGenerationError
+      }
+
       throw VideoValidationService.createError(
-        `Script generation failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`,
-        'SCRIPT_GENERATION_FAILED',
-        { requestId, userId: this.user.id },
+        'Script generation failed',
+        'SCRIPT_GENERATION_ERROR',
+        { originalError: error },
         true,
-        'Failed to generate script. Please try again.'
+        'Failed to generate the video script. Please try again.'
       );
     }
   }
@@ -477,12 +471,9 @@ export class VideoGeneratorService {
       // Fetch videos from database
       const { data: videos, error: fetchError } = await supabase
         .from('videos')
-        .select(
-          'id, title, description, upload_url, tags, user_id, processing_status'
-        )
+        .select('id, title, description, upload_url, tags, user_id')
         .in('id', videoIds)
-        .eq('user_id', this.user.id) // Ensure user owns these videos
-        .eq('processing_status', 'completed'); // Only use completed videos
+        .eq('user_id', this.user.id); // Ensure user owns these videos
 
       if (fetchError) {
         console.error('❌ Failed to fetch videos:', fetchError);
@@ -550,7 +541,7 @@ export class VideoGeneratorService {
 
       // Get the creatomate-builder-agent prompt from the prompt bank
       const promptTemplate = PromptService.fillPromptTemplate(
-        'creatomate-builder-agent',
+        'video-creatomate-agent-v2',
         {
           script,
           scenePlan: 'Will be generated by the builder',
@@ -573,7 +564,6 @@ export class VideoGeneratorService {
         editorialProfile: editorialProfile,
         captionStructure: captionStructure,
         agentPrompt: promptTemplate?.system,
-        outputLanguage: outputLanguage,
       });
 
       console.log('✅ Creatomate template generated successfully');

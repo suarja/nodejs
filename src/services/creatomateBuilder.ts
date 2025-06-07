@@ -1,9 +1,8 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import OpenAI from 'openai';
-import { createOpenAIClient, MODEL } from '../config/openai';
+import { createOpenAIClient } from '../config/openai';
 import { PromptService } from './promptService';
-import { EditorialProfile } from '../types/video';
 
 export class CreatomateBuilder {
   private static instance: CreatomateBuilder;
@@ -16,7 +15,7 @@ export class CreatomateBuilder {
     this.model = model;
   }
 
-  static getInstance(model: string = MODEL): CreatomateBuilder {
+  static getInstance(model: string): CreatomateBuilder {
     if (!CreatomateBuilder.instance) {
       CreatomateBuilder.instance = new CreatomateBuilder(model);
     }
@@ -105,11 +104,10 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
     script: string;
     selectedVideos: any[];
     voiceId: string;
-    editorialProfile: EditorialProfile;
+    editorialProfile: any;
     scenePlan: any;
     captionStructure?: any;
     agentPrompt?: string;
-    outputLanguage?: string;
   }): Promise<any> {
     const docs = await this.loadDocs();
 
@@ -125,9 +123,8 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
           script: params.script,
           scenePlan: JSON.stringify(params.scenePlan, null, 2),
           voiceId: params.voiceId,
-          outputLanguage: params.outputLanguage || 'en',
           captionInfo: params.captionStructure
-            ? `Caption Config: ${JSON.stringify(
+            ? `\n\nUTILISE CETTE STRUCTURE EXACTE POUR LES SOUS-TITRES:\n${JSON.stringify(
                 params.captionStructure,
                 null,
                 2
@@ -136,12 +133,10 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
         }
       );
 
-      if (promptTemplate) {
-        systemPrompt = promptTemplate.system;
-        userPrompt = promptTemplate.user;
-      } else {
-        // Fallback to default prompt
-        systemPrompt = `Tu es un expert en génération de vidéos avec Creatomate via JSON.
+      if (!promptTemplate) {
+        console.warn('Prompt template not found, using default system prompt');
+        systemPrompt = `
+Tu es un expert en génération de vidéos avec Creatomate via JSON.
 
 🎯 OBJECTIF PRINCIPAL
 Tu dois générer un fichier JSON **valide, complet et sans erreur**, destiné à générer une vidéo TikTok à partir de :
@@ -153,8 +148,8 @@ Tu dois générer un fichier JSON **valide, complet et sans erreur**, destiné �
    - 1 élément vidéo ('type: "video"') - OBLIGATOIRE
    - 1 voiceover IA ('type: "audio"') - OBLIGATOIRE  
    - 1 sous-titre dynamique ('type: "text"' avec transcript_source) - OBLIGATOIRE
-   - Chaque élément VIDÉO doit avoir un volume de 0% afin de ne pas interférer avec le voiceover`;
-
+   - Chaque élément VIDÉO doit avoir un volume de 0% afin de ne pas interférer avec le voiceover
+`;
         userPrompt = `Script: ${params.script}
 
 Scene Plan: ${JSON.stringify(params.scenePlan, null, 2)}
@@ -175,6 +170,14 @@ Documentation Creatomate:
 ${docs}
  
 Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les assets vidéo assignés dans le scene plan. Chaque scène doit avoir une vidéo, un voiceover, et des sous-titres.`;
+      } else {
+        systemPrompt = promptTemplate.system;
+        userPrompt = promptTemplate.user;
+
+        // Add documentation if not already included in the prompt
+        if (!userPrompt.includes('Documentation Creatomate')) {
+          userPrompt += `\n\nDocumentation Creatomate:\n${docs}`;
+        }
       }
     } else {
       // If system prompt is provided, still need to create user prompt
@@ -225,14 +228,12 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     script: string;
     selectedVideos: any[];
     voiceId: string;
-    editorialProfile?: EditorialProfile;
+    editorialProfile?: any;
     captionStructure?: any;
     agentPrompt?: string;
-    outputLanguage?: string;
   }): Promise<any> {
     console.log('Building Creatomate JSON template...');
     console.log('Voice ID:', params.voiceId);
-    console.log('Output Language:', params.outputLanguage || 'en');
     console.log(
       'Caption structure:',
       params.captionStructure ? 'Provided' : 'Not provided'
@@ -249,11 +250,10 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       script: params.script,
       selectedVideos: params.selectedVideos,
       voiceId: params.voiceId || 'NFcw9p0jKu3zbmXieNPE', // Default voice if not provided
-      editorialProfile: params.editorialProfile || ({} as EditorialProfile),
+      editorialProfile: params.editorialProfile,
       scenePlan,
       captionStructure: params.captionStructure,
       agentPrompt: params.agentPrompt,
-      outputLanguage: params.outputLanguage,
     });
 
     // Step 3: Validate the template

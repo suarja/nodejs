@@ -1,34 +1,30 @@
 import OpenAI from 'openai';
 import { createOpenAIClient, MODEL } from '../config/openai';
-import {
-  EditorialProfile,
-  ScriptReviewRequest,
-  ScriptReviewResponse,
-  AgentConfig,
-} from '../types/agents';
 
 export class ScriptReviewer {
   private openai: OpenAI;
   private model: string;
   private static instance: ScriptReviewer;
 
-  private constructor(config: AgentConfig) {
+  private constructor(model: string) {
     this.openai = createOpenAIClient();
-    this.model = config.model;
+    this.model = model;
   }
 
-  public static getInstance(
-    config: AgentConfig = { model: MODEL }
-  ): ScriptReviewer {
+  public static getInstance(model: string): ScriptReviewer {
     if (!ScriptReviewer.instance) {
-      ScriptReviewer.instance = new ScriptReviewer(config);
+      ScriptReviewer.instance = new ScriptReviewer(model);
     }
     return ScriptReviewer.instance;
   }
 
-  async review(request: ScriptReviewRequest): Promise<ScriptReviewResponse> {
+  async review(
+    script: string,
+    editorialProfile: any,
+    userSystemPrompt: string
+  ): Promise<string> {
     try {
-      console.log('🔍 Starting script review...');
+      console.log('Starting script review...');
 
       const completion = await this.openai.chat.completions.create({
         model: this.model,
@@ -91,21 +87,22 @@ Return the script with improvements if needed, or as is.
 Do not provide comments in any shape of form, only the script ready to be spoken.
 Ensure the script is smooth, clean, and ready for ElevenLabs synthesis without manual intervention.
 
-Editorial Profile:
-- Persona: ${request.editorialProfile.persona_description}
-- Tone: ${request.editorialProfile.tone_of_voice}
-- Audience: ${request.editorialProfile.audience}
-- Style: ${request.editorialProfile.style_notes}
+ Editorial Profile:
+            - Persona: ${editorialProfile.persona_description}
+            - Tone: ${editorialProfile.tone_of_voice}
+            - Audience: ${editorialProfile.audience}
+            - Style: ${editorialProfile.style_notes}
+            
 `,
           },
           {
             role: 'user',
             content: `
             System Prompt from the user:
-            ${request.userSystemPrompt}
+            ${userSystemPrompt}
 
             Script created from the user prompt by the script generator:
-            ${request.script}
+            ${script}
             `,
           },
         ],
@@ -120,11 +117,11 @@ Editorial Profile:
       const wordCount = reviewedScript.split(/\s+/).length;
       const estimatedDuration = wordCount * 0.4; // Rough estimate: 0.4 seconds per word
 
-      const warnings: string[] = [];
-
       if (estimatedDuration < 30 || estimatedDuration > 60) {
-        warnings.push(
-          `Script duration: Estimated ${estimatedDuration.toFixed(1)} seconds`
+        console.warn(
+          `Script duration warning: Estimated ${estimatedDuration.toFixed(
+            1
+          )} seconds`
         );
       }
 
@@ -135,34 +132,13 @@ Editorial Profile:
         .split(/[.!?]/)
         .some((sentence) => sentence.split(/\s+/).length > 25);
 
-      if (hasStageDirections) {
-        warnings.push('Script contains stage directions that may affect TTS');
-      }
-      if (hasInvalidPunctuation) {
-        warnings.push('Script contains invalid punctuation for TTS');
-      }
-      if (hasLongSentences) {
-        warnings.push('Script contains sentences that may be too long for TTS');
+      if (hasStageDirections || hasInvalidPunctuation || hasLongSentences) {
+        console.warn('Script contains potential TTS issues');
       }
 
-      if (warnings.length > 0) {
-        console.warn('⚠️ Script review warnings:', warnings);
-      }
-
-      console.log(
-        `✅ Script reviewed: ${wordCount} words, ~${estimatedDuration.toFixed(
-          1
-        )}s`
-      );
-
-      return {
-        reviewedScript,
-        estimatedDuration,
-        wordCount,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      };
+      return reviewedScript;
     } catch (error) {
-      console.error('❌ Error reviewing script:', error);
+      console.error('Error reviewing script:', error);
       throw new Error(
         `Failed to review script: ${
           error instanceof Error ? error.message : 'Unknown error'

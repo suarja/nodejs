@@ -1,24 +1,20 @@
 import promptBankJson from '../config/prompt-bank.json';
-import {
-  PromptDefinition,
-  PromptBank,
-  FilledPromptTemplate,
-} from '../types/prompts';
+import { PromptDefinition, PromptBank } from '../types/prompts';
 
 /**
- * Service for managing and accessing prompts - matches mobile app implementation
+ * Service for managing prompts from the prompt bank
  */
 export class PromptService {
-  private static prompts: PromptDefinition[] =
-    promptBankJson as PromptDefinition[];
+  private static promptBank: PromptBank = promptBankJson as PromptBank;
 
   /**
    * Get a prompt by ID
-   * @param id The ID of the prompt to retrieve
-   * @returns The prompt or null if not found
+   * @param promptId The ID of the prompt to retrieve
+   * @returns The prompt definition or null if not found
    */
-  static getPrompt(id: string): PromptDefinition | null {
-    return this.prompts.find((prompt) => prompt.id === id) || null;
+  static getPrompt(promptId: string): PromptDefinition | null {
+    const prompt = this.promptBank.find((p) => p.id === promptId);
+    return prompt || null;
   }
 
   /**
@@ -26,7 +22,7 @@ export class PromptService {
    * @returns Array of all prompts
    */
   static getAllPrompts(): PromptDefinition[] {
-    return this.prompts;
+    return this.promptBank;
   }
 
   /**
@@ -35,51 +31,53 @@ export class PromptService {
    * @returns Array of prompts with the specified tag
    */
   static getPromptsByTag(tag: string): PromptDefinition[] {
-    return this.prompts.filter((prompt) => prompt.tags.includes(tag));
+    return this.promptBank.filter((prompt) => prompt.tags.includes(tag));
   }
 
   /**
-   * Get the latest version of each prompt
-   * @returns Array of latest prompts
+   * Get the latest version of all prompts
+   * @returns Array of latest prompt definitions
    */
   static getLatestPrompts(): PromptDefinition[] {
-    return this.prompts.filter((prompt) => prompt.status === 'LATEST');
+    return this.promptBank.filter((p) => p.status === 'LATEST');
   }
 
   /**
-   * Fill a prompt template with provided values
-   * @param id The ID of the prompt to fill
-   * @param values Object containing values to substitute in the template
-   * @returns Filled prompt template or null if prompt not found
+   * Fill a prompt template with values
+   * @param promptId The ID of the prompt to fill
+   * @param values The values to fill in the template
+   * @returns The filled prompt components or null if prompt not found
    */
   static fillPromptTemplate(
-    id: string,
+    promptId: string,
     values: Record<string, any>
-  ): FilledPromptTemplate | null {
-    const prompt = this.getPrompt(id);
-    if (!prompt) {
-      return null;
-    }
+  ): { system: string; user: string; developer?: string } | null {
+    const prompt = this.getPrompt(promptId);
+    if (!prompt) return null;
 
-    const fillTemplate = (template: string): string => {
-      return template.replace(/\{(\w+)\}/g, (match, key) => {
-        if (key in values) {
-          const value = values[key];
-          // Handle JSON objects by stringifying them
-          if (typeof value === 'object' && value !== null) {
-            return JSON.stringify(value, null, 2);
-          }
-          return String(value);
-        }
-        return match; // Keep original placeholder if no value provided
+    const fillTemplate = (
+      template: string,
+      values: Record<string, any>
+    ): string => {
+      let filledTemplate = template;
+      Object.entries(values).forEach(([key, value]) => {
+        const stringValue =
+          typeof value === 'object'
+            ? JSON.stringify(value, null, 2)
+            : String(value);
+        filledTemplate = filledTemplate.replace(
+          new RegExp(`{${key}}`, 'g'),
+          stringValue
+        );
       });
+      return filledTemplate;
     };
 
     return {
-      system: fillTemplate(prompt.prompts.system),
-      user: fillTemplate(prompt.prompts.user),
+      system: fillTemplate(prompt.prompts.system, values),
+      user: fillTemplate(prompt.prompts.user, values),
       developer: prompt.prompts.developer
-        ? fillTemplate(prompt.prompts.developer)
+        ? fillTemplate(prompt.prompts.developer, values)
         : undefined,
     };
   }

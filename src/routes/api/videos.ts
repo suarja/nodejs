@@ -29,9 +29,6 @@ export async function generateVideoHandler(req: Request, res: Response) {
     if (authError) {
       return errorResponseExpress(res, authError.error, authError.status);
     }
-    if (user) {
-      throw new Error('test');
-    }
 
     console.log('🔐 User authenticated:', user.id);
 
@@ -58,9 +55,6 @@ export async function generateVideoHandler(req: Request, res: Response) {
         validationResult.error.status,
         validationResult.error.details
       );
-    }
-    if (user) {
-      throw new Error('test');
     }
 
     // Step 4: Generate video using the proper generator service

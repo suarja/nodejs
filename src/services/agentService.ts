@@ -1,27 +1,20 @@
 import { ScriptGenerator } from './scriptGenerator';
 import { ScriptReviewer } from './scriptReviewer';
-import { testOpenAIConnection } from '../config/openai';
-import {
-  ScriptGenerationRequest,
-  ScriptGenerationResponse,
-  ScriptReviewRequest,
-  ScriptReviewResponse,
-  AgentConfig,
-} from '../types/agents';
+import { testOpenAIConnection, MODELS } from '../config/openai';
 
 export class AgentService {
   private scriptGenerator: ScriptGenerator;
   private scriptReviewer: ScriptReviewer;
   private static instance: AgentService;
 
-  private constructor(config?: AgentConfig) {
-    this.scriptGenerator = ScriptGenerator.getInstance(config);
-    this.scriptReviewer = ScriptReviewer.getInstance(config);
+  private constructor() {
+    this.scriptGenerator = ScriptGenerator.getInstance(MODELS['o4-mini']);
+    this.scriptReviewer = ScriptReviewer.getInstance(MODELS['o4-mini']);
   }
 
-  public static getInstance(config?: AgentConfig): AgentService {
+  public static getInstance(): AgentService {
     if (!AgentService.instance) {
-      AgentService.instance = new AgentService(config);
+      AgentService.instance = new AgentService();
     }
     return AgentService.instance;
   }
@@ -52,11 +45,17 @@ export class AgentService {
    * Generate a script using the script generator agent
    */
   async generateScript(
-    request: ScriptGenerationRequest
-  ): Promise<ScriptGenerationResponse> {
+    prompt: string,
+    editorialProfile: any,
+    systemPrompt: string
+  ): Promise<string> {
     try {
       console.log('🎬 AgentService: Generating script...');
-      return await this.scriptGenerator.generate(request);
+      return await this.scriptGenerator.generate(
+        prompt,
+        editorialProfile,
+        systemPrompt
+      );
     } catch (error) {
       console.error('❌ AgentService: Script generation failed:', error);
       throw error;
@@ -67,11 +66,17 @@ export class AgentService {
    * Review a script using the script reviewer agent
    */
   async reviewScript(
-    request: ScriptReviewRequest
-  ): Promise<ScriptReviewResponse> {
+    script: string,
+    editorialProfile: any,
+    userSystemPrompt: string
+  ): Promise<string> {
     try {
       console.log('🔍 AgentService: Reviewing script...');
-      return await this.scriptReviewer.review(request);
+      return await this.scriptReviewer.review(
+        script,
+        editorialProfile,
+        userSystemPrompt
+      );
     } catch (error) {
       console.error('❌ AgentService: Script review failed:', error);
       throw error;
@@ -82,31 +87,35 @@ export class AgentService {
    * Generate and review a script in one operation
    */
   async generateAndReviewScript(
-    generationRequest: ScriptGenerationRequest
+    prompt: string,
+    editorialProfile: any,
+    systemPrompt: string
   ): Promise<{
-    generation: ScriptGenerationResponse;
-    review: ScriptReviewResponse;
+    generatedScript: string;
+    reviewedScript: string;
   }> {
     try {
       console.log('🎭 AgentService: Generating and reviewing script...');
 
       // Generate script
-      const generation = await this.generateScript(generationRequest);
+      const generatedScript = await this.generateScript(
+        prompt,
+        editorialProfile,
+        systemPrompt
+      );
 
       // Review the generated script
-      const reviewRequest: ScriptReviewRequest = {
-        script: generation.script,
-        editorialProfile: generationRequest.editorialProfile,
-        userSystemPrompt: generationRequest.systemPrompt,
-      };
-
-      const review = await this.reviewScript(reviewRequest);
+      const reviewedScript = await this.reviewScript(
+        generatedScript,
+        editorialProfile,
+        systemPrompt
+      );
 
       console.log('✅ AgentService: Script generation and review completed');
 
       return {
-        generation,
-        review,
+        generatedScript,
+        reviewedScript,
       };
     } catch (error) {
       console.error('❌ AgentService: Generate and review failed:', error);
