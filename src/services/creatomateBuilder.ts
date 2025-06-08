@@ -3,6 +3,7 @@ import { join } from 'path';
 import OpenAI from 'openai';
 import { createOpenAIClient } from '../config/openai';
 import { PromptService } from './promptService';
+import { convertCaptionConfigToProperties } from '../utils/video/preset-converter';
 
 export class CreatomateBuilder {
   private static instance: CreatomateBuilder;
@@ -259,7 +260,12 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     // Step 3: Fix template issues (e.g., video.fit)
     this.fixTemplate(template);
 
-    // Step 4: Validate the template
+    // Step 4: Fix caption configuration if provided
+    if (params.captionStructure) {
+      this.fixCaptions(template, params.captionStructure);
+    }
+
+    // Step 5: Validate the template
     this.validateTemplate(template);
 
     return template;
@@ -303,6 +309,38 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
       element.elements.forEach((element: any) => {
         if (element.type === 'video') {
           element.fit = 'cover';
+        }
+      });
+    });
+  }
+
+  private fixCaptions(template: any, captionConfig: any) {
+    // Import the preset converter utility
+
+    // Get the properties to apply from the caption configuration
+    const captionProperties = convertCaptionConfigToProperties(captionConfig);
+
+    // Apply caption configuration to all text elements
+    template.elements.forEach((scene: any) => {
+      scene.elements.forEach((element: any) => {
+        if (
+          element.type === 'text' &&
+          element.name &&
+          element.name.toLowerCase().includes('subtitle')
+        ) {
+          // Preserve critical properties that should not be overwritten
+          const preservedProperties = {
+            id: element.id,
+            name: element.name,
+            type: element.type,
+            track: element.track,
+            time: element.time,
+            duration: element.duration,
+            transcript_source: element.transcript_source, // Critical: preserve the audio source link
+          };
+
+          // Apply all caption properties, then restore preserved ones
+          Object.assign(element, captionProperties, preservedProperties);
         }
       });
     });
