@@ -59,7 +59,13 @@ export class VideoGeneratorService {
     const startTime = Date.now();
 
     try {
-      const { editorialProfile } = payload;
+      const {
+        prompt,
+        systemPrompt,
+
+        outputLanguage,
+        editorialProfile,
+      } = payload;
 
       console.log(`🎬 Starting video generation for user ${this.user.id}`);
 
@@ -74,11 +80,27 @@ export class VideoGeneratorService {
         `✅ Video request created: ${videoRequest.id} - returning to frontend`
       );
 
-      // Step 2: Start background processing (fire and forget)
+      // Step 2: Generate and review script with timeout
+      const { scriptId: generatedScriptId, reviewedScript } =
+        await this.withTimeout(
+          this.generateAndSaveScript(
+            prompt,
+            systemPrompt,
+            editorialProfile,
+            outputLanguage,
+            videoRequest.id
+          ),
+          VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
+          'Script generation timed out'
+        );
+      const scriptId = generatedScriptId;
+
+      // Step 3: Start background processing (fire and forget)
       this.processVideoInBackground(
         videoRequest.id,
         payload,
-        editorialProfile
+        editorialProfile,
+        { scriptId, reviewedScript }
       ).catch((error) => {
         console.error(
           `❌ Background processing failed for request ${videoRequest.id}:`,
@@ -131,10 +153,10 @@ export class VideoGeneratorService {
   private async processVideoInBackground(
     requestId: string,
     payload: VideoGenerationPayload,
-    editorialProfile: EditorialProfile
+    editorialProfile: EditorialProfile,
+    script: { scriptId: string; reviewedScript: string }
   ): Promise<void> {
     const startTime = Date.now();
-    let scriptId: string | null = null;
 
     try {
       console.log(`🔄 Starting background processing for request ${requestId}`);
@@ -145,29 +167,8 @@ export class VideoGeneratorService {
         VideoRequestStatus.RENDERING
       );
 
-      const {
-        prompt,
-        systemPrompt,
-        selectedVideos,
-        voiceId,
-        captionConfig,
-        outputLanguage,
-      } = payload;
-
-      // Step 1: Generate and review script with timeout
-      const { scriptId: generatedScriptId, reviewedScript } =
-        await this.withTimeout(
-          this.generateAndSaveScript(
-            prompt,
-            systemPrompt,
-            editorialProfile,
-            outputLanguage,
-            requestId
-          ),
-          VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
-          'Script generation timed out'
-        );
-      scriptId = generatedScriptId;
+      const { prompt, selectedVideos, voiceId, captionConfig, outputLanguage } =
+        payload;
 
       // Step 2: Fetch and validate videos
       const videosObj = await this.withTimeout(
@@ -179,7 +180,7 @@ export class VideoGeneratorService {
       // Step 3: Generate Creatomate template
       const template = await this.withTimeout(
         this.generateTemplate(
-          reviewedScript,
+          script.reviewedScript,
           videosObj,
           voiceId,
           editorialProfile,
@@ -193,24 +194,29 @@ export class VideoGeneratorService {
       // Step 4: Store training data (fire and forget)
       this.storeTrainingDataAsync(
         prompt,
-        reviewedScript,
+        script.reviewedScript,
         template,
         requestId
       ).catch((error) => console.warn('Training data storage failed:', error));
 
       // Step 5: Start Creatomate render
       const renderId = await this.withTimeout(
-        this.startCreatomateRender(template, requestId, scriptId, prompt),
+        this.startCreatomateRender(
+          template,
+          requestId,
+          script.scriptId,
+          prompt
+        ),
         VideoGeneratorService.CREATOMATE_API_TIMEOUT,
         'Creatomate render start timed out'
       );
 
       // Step 6: Update video request with completion
       await this.updateVideoRequestWithResults(requestId, {
-        status: 'completed',
-        scriptId,
+        status: VideoRequestStatus.COMPLETED,
+        scriptId: script.scriptId,
         renderId,
-        script: reviewedScript,
+        script: script.reviewedScript,
         template,
       });
 
@@ -228,14 +234,14 @@ export class VideoGeneratorService {
       // Update request with failure status
       await this.updateVideoRequestStatus(
         requestId,
-        'failed',
+        VideoRequestStatus.FAILED,
         error instanceof Error
           ? error.message
           : 'Unknown error during processing'
       );
 
       // Attempt cleanup on failure
-      await this.cleanupOnFailure(scriptId, requestId);
+      await this.cleanupOnFailure(script.scriptId, requestId);
     }
   }
 
@@ -324,7 +330,7 @@ export class VideoGeneratorService {
         updateData.completed_at = new Date().toISOString();
       } else if (status === VideoRequestStatus.FAILED && errorMessage) {
         console.warn('Failed to update video request status:', errorMessage);
-        // updateData.error_message = errorMessage || 'Unknown error';
+        updateData.error_message = errorMessage || 'Unknown error';
       }
 
       const { error } = await supabase
@@ -347,7 +353,7 @@ export class VideoGeneratorService {
   private async updateVideoRequestWithResults(
     requestId: string,
     results: {
-      status: 'done' | 'rendering' | 'queued' | 'error';
+      status: VideoRequestStatus;
       scriptId: string;
       renderId: string;
       script: string;

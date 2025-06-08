@@ -256,7 +256,10 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       agentPrompt: params.agentPrompt,
     });
 
-    // Step 3: Validate the template
+    // Step 3: Fix template issues (e.g., video.fit)
+    this.fixTemplate(template);
+
+    // Step 4: Validate the template
     this.validateTemplate(template);
 
     return template;
@@ -284,5 +287,24 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     }
 
     console.log('✅ Template validation passed');
+  }
+
+  /* A function to post process the template to fix the elements. Exactly the video.fit:
+
+  Error Details:
+Source error: Video.fit: Expected one of these values: cover, contain, fill
+  We should enforce the fit to be cover
+
+}
+  */
+  private fixTemplate(template: any) {
+    // Fix the elements.video.fit to be cover
+    template.elements.forEach((element: any) => {
+      element.elements.forEach((element: any) => {
+        if (element.type === 'video') {
+          element.fit = 'cover';
+        }
+      });
+    });
   }
 }

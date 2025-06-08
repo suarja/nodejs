@@ -2,13 +2,20 @@ import { Request, Response } from 'express';
 import { supabase } from '../../config/supabase';
 import { AuthService } from '../../services/authService';
 import { VideoValidationService } from '../../services/video/validation';
-import { VideoGeneratorService } from '../../services/video/generator';
+import {
+  VideoGeneratorService,
+  VideoRequestStatus,
+} from '../../services/video/generator';
 import { VideoStatusResponse, ApiResponse } from '../../types/video';
 import {
   successResponseExpress,
   errorResponseExpress,
   HttpStatus,
 } from '../../utils/api/responses';
+import {
+  CreatomateRenderResponse,
+  CreatomateRenderResponseSchema,
+} from '../../types/renders';
 
 /**
  * Video generation API controller matching the original mobile app
@@ -139,7 +146,7 @@ function determineErrorStatusCode(error: any): number {
 export async function getVideoStatusHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
-
+    console.log('id- +api', id);
     // Step 1: Authenticate user using AuthService
     const authHeader = req.headers.authorization;
     const { user, errorResponse: authError } = await AuthService.verifyUser(
@@ -165,9 +172,79 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
       );
     }
 
+    // If the video is still rendering, check Creatomate status
+    if (
+      videoRequest.render_status === VideoRequestStatus.RENDERING &&
+      videoRequest.render_id
+    ) {
+      try {
+        // Check Creatomate status
+        const url = `https://api.creatomate.com/v1/renders/${videoRequest.render_id}`;
+        console.log('url- +api', url);
+        const renderResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${process.env.CREATOMATE_API_KEY}`,
+          },
+        });
+        console.log('renderResponse- +api', renderResponse);
+
+        if (renderResponse.ok) {
+          const renderData = CreatomateRenderResponseSchema.parse(
+            await renderResponse.json()
+          );
+          console.log('Creatomate render status:', renderData.status);
+
+          // Update database based on Creatomate status
+          if (renderData.status === VideoRequestStatus.COMPLETED) {
+            const { error: updateError } = await supabase
+              .from('video_requests')
+              .update({
+                render_status: VideoRequestStatus.COMPLETED,
+                render_url: renderData.url,
+                snapshot_url: renderData.snapshot_url,
+              })
+              .eq('id', id);
+
+            if (updateError) {
+              console.error('Error updating video status:', updateError);
+            } else {
+              // Update the response object with the new status
+              videoRequest.render_status = 'done';
+              videoRequest.render_url = renderData.url;
+            }
+          } else if (renderData.status === 'failed') {
+            const { error: updateError } = await supabase
+              .from('video_requests')
+              .update({
+                render_status: 'error',
+              })
+              .eq('id', id);
+
+            if (updateError) {
+              console.error('Error updating video status:', updateError);
+            } else {
+              videoRequest.render_status = 'error';
+            }
+          }
+          // If still 'rendering', no need to update
+        } else {
+          console.error(
+            'Error checking Creatomate status:',
+            await renderResponse.text()
+          );
+        }
+      } catch (creatomateError) {
+        console.error(
+          'Error checking Creatomate render status:',
+          creatomateError
+        );
+      }
+    }
+
     // Get queue position if still queued
     let queuePosition: number | undefined;
-    if (videoRequest.status === 'queued') {
+    if (videoRequest.status === VideoRequestStatus.QUEUED) {
       const { count } = await supabase
         .from('video_requests')
         .select('*', { count: 'exact', head: true })
@@ -185,16 +262,16 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
         ? `${Math.max(1, Math.ceil(queuePosition * 0.5))} minutes`
         : undefined,
       progress:
-        videoRequest.status === 'processing'
+        videoRequest.status === VideoRequestStatus.RENDERING
           ? 50
-          : videoRequest.status === 'completed'
+          : videoRequest.status === VideoRequestStatus.COMPLETED
           ? 100
           : 0,
       error: videoRequest.error_message || undefined,
       result: videoRequest.result_data || undefined,
     };
 
-    return successResponseExpress(res, response);
+    return successResponseExpress(res, videoRequest);
   } catch (error) {
     console.error('❌ Video status error:', error);
     return errorResponseExpress(
