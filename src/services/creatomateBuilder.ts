@@ -313,7 +313,7 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
   }
 
   /**
-   * Handle caption configuration with enhanced logic for enable/disable toggle
+   * Handle caption configuration with simplified logic
    */
   private handleCaptionConfiguration(template: any, captionConfig: any) {
     // If no caption config provided, apply default configuration
@@ -335,7 +335,7 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
       return;
     }
 
-    // Apply enhanced caption configuration
+    // Apply caption configuration
     this.fixCaptions(template, captionConfig);
   }
 

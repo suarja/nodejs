@@ -6,16 +6,12 @@ import {
   VideoGeneratorService,
   VideoRequestStatus,
 } from '../../services/video/generator';
-import { VideoStatusResponse, ApiResponse } from '../../types/video';
 import {
   successResponseExpress,
   errorResponseExpress,
   HttpStatus,
 } from '../../utils/api/responses';
-import {
-  CreatomateRenderResponse,
-  CreatomateRenderResponseSchema,
-} from '../../types/renders';
+import { CreatomateRenderResponseSchema } from '../../types/renders';
 
 /**
  * Video generation API controller matching the original mobile app

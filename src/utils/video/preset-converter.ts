@@ -24,9 +24,9 @@ interface VideoPreset {
 }
 
 /**
- * Enhanced caption configuration from user input
+ * Caption configuration from user input
  */
-interface EnhancedCaptionConfig {
+interface CaptionConfig {
   enabled: boolean;
   presetId?: string;
   placement?: 'top' | 'center' | 'bottom';
@@ -38,15 +38,6 @@ interface EnhancedCaptionConfig {
     | 'bounce'
     | 'slide'
     | 'enlarge';
-}
-
-/**
- * Legacy caption configuration for backward compatibility
- */
-interface LegacyCaptionConfig {
-  presetId?: string;
-  placement?: 'top' | 'middle' | 'bottom';
-  highlightColor?: string;
 }
 
 /**
@@ -191,7 +182,6 @@ function mapPlacementToYAlignment(placement: string): string {
     case 'top':
       return '10%';
     case 'center':
-    case 'middle': // Legacy compatibility
       return '50%';
     case 'bottom':
     default:
@@ -200,49 +190,30 @@ function mapPlacementToYAlignment(placement: string): string {
 }
 
 /**
- * Converts an enhanced caption configuration to Creatomate text element properties
- * @param config The enhanced caption configuration from user input
+ * Converts a caption configuration to Creatomate text element properties
+ * @param config The caption configuration from user input
  * @returns Properties to apply to Creatomate text elements
  */
 export function convertCaptionConfigToProperties(
-  config: EnhancedCaptionConfig | LegacyCaptionConfig | null | undefined
+  config: CaptionConfig | null | undefined
 ): Record<string, any> {
   // If no config provided, return default karaoke settings
   if (!config) {
     return getDefaultCaptionProperties();
   }
 
-  // Handle legacy config format (migrate to enhanced)
-  if ('highlightColor' in config) {
-    const legacyConfig = config as LegacyCaptionConfig;
-    const enhancedConfig: EnhancedCaptionConfig = {
-      enabled: true, // Legacy configs are always enabled
-      presetId: legacyConfig.presetId,
-      placement:
-        legacyConfig.placement === 'middle' ? 'center' : legacyConfig.placement,
-      transcriptColor: legacyConfig.highlightColor,
-      transcriptEffect: 'karaoke', // Default effect for legacy
-    };
-    return convertEnhancedConfigToProperties(enhancedConfig);
-  }
-
-  // Handle enhanced config format
-  const enhancedConfig = config as EnhancedCaptionConfig;
-
-  // If captions are disabled, return null (will be handled by disableCaptions method)
-  if (enhancedConfig.enabled === false) {
+  // If captions are disabled, return empty object (will be handled by disableCaptions method)
+  if (config.enabled === false) {
     return {};
   }
 
-  return convertEnhancedConfigToProperties(enhancedConfig);
+  return convertConfigToProperties(config);
 }
 
 /**
- * Convert enhanced configuration to Creatomate properties
+ * Convert configuration to Creatomate properties
  */
-function convertEnhancedConfigToProperties(
-  config: EnhancedCaptionConfig
-): Record<string, any> {
+function convertConfigToProperties(config: CaptionConfig): Record<string, any> {
   // If config provided but no presetId, use defaults with custom overrides
   if (!config.presetId) {
     const defaultProps = getDefaultCaptionProperties();
@@ -335,11 +306,11 @@ function presetToCreatomateProperties(
 }
 
 /**
- * Apply custom overrides from enhanced config
+ * Apply custom overrides from config
  */
 function applyCustomOverrides(
   baseProperties: Record<string, any>,
-  config: EnhancedCaptionConfig
+  config: CaptionConfig
 ): Record<string, any> {
   const result = { ...baseProperties };
 

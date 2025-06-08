@@ -15,18 +15,25 @@ export interface VideoType {
   processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
+// Type definitions for color constraints
+export type HexColor = `#${string}`;
+
+// Enhanced transcript effects supported by Creatomate
+export type TranscriptEffect =
+  | 'karaoke'
+  | 'highlight'
+  | 'fade'
+  | 'bounce'
+  | 'slide'
+  | 'enlarge';
+
+// Caption configuration interface
 export interface CaptionConfiguration {
-  presetId: string;
-  placement: 'top' | 'bottom' | 'center';
-  lines: number;
-  fontFamily?: string;
-  fontSize?: number;
-  fontColor?: string;
-  backgroundColor?: string;
-  animation?: string;
-  effect?: string;
-  highlightColor?: string;
-  maxWordsPerLine?: number;
+  enabled: boolean; // Toggle control for enabling/disabling captions
+  presetId?: string; // Preset identifier (karaoke, beasty, etc.)
+  placement: 'top' | 'center' | 'bottom'; // Position on screen
+  transcriptColor?: HexColor; // Custom color override for transcript_color
+  transcriptEffect?: TranscriptEffect; // Custom effect override for transcript_effect
 }
 
 // Enhanced types for better validation
@@ -83,14 +90,23 @@ export function isValidVideo(video: any): video is VideoType {
   );
 }
 
+// Caption config validation
 export function isValidCaptionConfig(
   config: any
 ): config is CaptionConfiguration {
   return (
     typeof config === 'object' &&
     config !== null &&
-    typeof config.presetId === 'string' &&
-    ['top', 'bottom', 'center'].includes(config.placement)
+    typeof config.enabled === 'boolean' &&
+    (config.presetId === undefined || typeof config.presetId === 'string') &&
+    ['top', 'center', 'bottom'].includes(config.placement) &&
+    (config.transcriptColor === undefined ||
+      (typeof config.transcriptColor === 'string' &&
+        config.transcriptColor.startsWith('#'))) &&
+    (config.transcriptEffect === undefined ||
+      ['karaoke', 'highlight', 'fade', 'bounce', 'slide', 'enlarge'].includes(
+        config.transcriptEffect
+      ))
   );
 }
 

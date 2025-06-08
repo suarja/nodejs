@@ -324,7 +324,8 @@ export class VideoValidationService {
       errors.push({
         field: 'captionConfig',
         code: 'INVALID_CAPTION_CONFIG',
-        message: 'Caption configuration is invalid',
+        message:
+          'Caption configuration is invalid. Must include "enabled" boolean property.',
         value: captionConfig,
       });
     }
