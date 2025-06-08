@@ -328,6 +328,22 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
           element.name &&
           element.name.toLowerCase().includes('subtitle')
         ) {
+          // Remove conflicting old format properties that can interfere
+          const conflictingProperties = [
+            'x',
+            'y', // Old positioning format
+            'highlight_color', // Should be transcript_color
+            'shadow_x',
+            'shadow_y',
+            'shadow_blur',
+            'shadow_color', // Legacy shadow properties
+            'text_transform', // Can conflict with Creatomate's text handling
+          ];
+
+          conflictingProperties.forEach((prop) => {
+            delete element[prop];
+          });
+
           // Preserve critical properties that should not be overwritten
           const preservedProperties = {
             id: element.id,
