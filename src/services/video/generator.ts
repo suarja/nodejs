@@ -431,6 +431,13 @@ export class VideoGeneratorService {
         .select()
         .single();
 
+      await supabase
+        .from('video_requests')
+        .update({
+          script_id: script.id,
+        })
+        .eq('id', requestId);
+
       if (scriptError) {
         throw VideoValidationService.createError(
           'Failed to save script to database',
