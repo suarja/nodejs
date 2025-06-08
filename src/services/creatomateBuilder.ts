@@ -223,7 +223,7 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
   }
 
   /**
-   * Builds a Creatomate JSON template
+   * Builds a Creatomate JSON template with enhanced caption support
    */
   async buildJson(params: {
     script: string;
@@ -260,10 +260,8 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     // Step 3: Fix template issues (e.g., video.fit)
     this.fixTemplate(template);
 
-    // Step 4: Fix caption configuration if provided
-    if (params.captionStructure) {
-      this.fixCaptions(template, params.captionStructure);
-    }
+    // Step 4: Handle caption configuration (enhanced logic)
+    this.handleCaptionConfiguration(template, params.captionStructure);
 
     // Step 5: Validate the template
     this.validateTemplate(template);
@@ -310,6 +308,55 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
         if (element.type === 'video') {
           element.fit = 'cover';
         }
+      });
+    });
+  }
+
+  /**
+   * Handle caption configuration with enhanced logic for enable/disable toggle
+   */
+  private handleCaptionConfiguration(template: any, captionConfig: any) {
+    // If no caption config provided, apply default configuration
+    if (!captionConfig) {
+      const defaultConfig = {
+        enabled: true,
+        presetId: 'karaoke',
+        placement: 'bottom',
+        transcriptColor: '#04f827',
+        transcriptEffect: 'karaoke',
+      };
+      this.fixCaptions(template, defaultConfig);
+      return;
+    }
+
+    // Check if captions are disabled
+    if (captionConfig.enabled === false) {
+      this.disableCaptions(template);
+      return;
+    }
+
+    // Apply enhanced caption configuration
+    this.fixCaptions(template, captionConfig);
+  }
+
+  /**
+   * Remove all caption elements from the template
+   */
+  private disableCaptions(template: any) {
+    console.log('Disabling captions - removing all subtitle elements');
+
+    template.elements.forEach((scene: any) => {
+      scene.elements = scene.elements.filter((element: any) => {
+        const isSubtitle =
+          element.type === 'text' &&
+          element.name &&
+          element.name.toLowerCase().includes('subtitle');
+
+        if (isSubtitle) {
+          console.log(`Removing subtitle element: ${element.name}`);
+        }
+
+        return !isSubtitle;
       });
     });
   }

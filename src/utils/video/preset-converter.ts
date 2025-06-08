@@ -24,16 +24,33 @@ interface VideoPreset {
 }
 
 /**
- * Caption configuration from user input
+ * Enhanced caption configuration from user input
  */
-interface CaptionConfig {
+interface EnhancedCaptionConfig {
+  enabled: boolean;
+  presetId?: string;
+  placement?: 'top' | 'center' | 'bottom';
+  transcriptColor?: string;
+  transcriptEffect?:
+    | 'karaoke'
+    | 'highlight'
+    | 'fade'
+    | 'bounce'
+    | 'slide'
+    | 'enlarge';
+}
+
+/**
+ * Legacy caption configuration for backward compatibility
+ */
+interface LegacyCaptionConfig {
   presetId?: string;
   placement?: 'top' | 'middle' | 'bottom';
   highlightColor?: string;
 }
 
 /**
- * Available video presets (from lib/config/video-presets.ts)
+ * Available video presets (extended with new effects)
  */
 const VIDEO_PRESETS: VideoPreset[] = [
   {
@@ -78,6 +95,90 @@ const VIDEO_PRESETS: VideoPreset[] = [
     height: '100%',
     placement: 'bottom',
   },
+  {
+    id: 'fade',
+    name: 'Fade',
+    font_family: 'Montserrat',
+    font_weight: '700',
+    font_size: '8 vmin',
+    fill_color: '#ffffff',
+    stroke_color: '#333333',
+    stroke_width: '1.05 vmin',
+    background_color: 'rgba(216,216,216,0)',
+    background_x_padding: '26%',
+    background_y_padding: '7%',
+    background_border_radius: '28%',
+    transcript_effect: 'fade',
+    transcript_placement: 'animate',
+    transcript_color: '#ffffff',
+    transcript_maximum_length: 25,
+    width: '90%',
+    height: '100%',
+    placement: 'bottom',
+  },
+  {
+    id: 'bounce',
+    name: 'Bounce',
+    font_family: 'Montserrat',
+    font_weight: '700',
+    font_size: '8 vmin',
+    fill_color: '#ffffff',
+    stroke_color: '#333333',
+    stroke_width: '1.05 vmin',
+    background_color: 'rgba(216,216,216,0)',
+    background_x_padding: '26%',
+    background_y_padding: '7%',
+    background_border_radius: '28%',
+    transcript_effect: 'bounce',
+    transcript_placement: 'animate',
+    transcript_color: '#ff4081',
+    transcript_maximum_length: 25,
+    width: '90%',
+    height: '100%',
+    placement: 'bottom',
+  },
+  {
+    id: 'slide',
+    name: 'Slide',
+    font_family: 'Montserrat',
+    font_weight: '700',
+    font_size: '8 vmin',
+    fill_color: '#ffffff',
+    stroke_color: '#333333',
+    stroke_width: '1.05 vmin',
+    background_color: 'rgba(216,216,216,0)',
+    background_x_padding: '26%',
+    background_y_padding: '7%',
+    background_border_radius: '28%',
+    transcript_effect: 'slide',
+    transcript_placement: 'animate',
+    transcript_color: '#00bcd4',
+    transcript_maximum_length: 25,
+    width: '90%',
+    height: '100%',
+    placement: 'bottom',
+  },
+  {
+    id: 'enlarge',
+    name: 'Enlarge',
+    font_family: 'Montserrat',
+    font_weight: '700',
+    font_size: '8 vmin',
+    fill_color: '#ffffff',
+    stroke_color: '#333333',
+    stroke_width: '1.05 vmin',
+    background_color: 'rgba(216,216,216,0)',
+    background_x_padding: '26%',
+    background_y_padding: '7%',
+    background_border_radius: '28%',
+    transcript_effect: 'enlarge',
+    transcript_placement: 'animate',
+    transcript_color: '#9c27b0',
+    transcript_maximum_length: 25,
+    width: '90%',
+    height: '100%',
+    placement: 'bottom',
+  },
 ];
 
 /**
@@ -89,7 +190,8 @@ function mapPlacementToYAlignment(placement: string): string {
   switch (placement) {
     case 'top':
       return '10%';
-    case 'middle':
+    case 'center':
+    case 'middle': // Legacy compatibility
       return '50%';
     case 'bottom':
     default:
@@ -98,114 +200,165 @@ function mapPlacementToYAlignment(placement: string): string {
 }
 
 /**
- * Converts a caption configuration to Creatomate text element properties
- * @param config The caption configuration from user input
+ * Converts an enhanced caption configuration to Creatomate text element properties
+ * @param config The enhanced caption configuration from user input
  * @returns Properties to apply to Creatomate text elements
  */
 export function convertCaptionConfigToProperties(
-  config: CaptionConfig | null | undefined
+  config: EnhancedCaptionConfig | LegacyCaptionConfig | null | undefined
 ): Record<string, any> {
   // If no config provided, return default karaoke settings
   if (!config) {
-    return {
-      width: '90%',
-      height: '100%',
-      font_size: '8 vmin',
-      fill_color: '#ffffff',
-      font_family: 'Montserrat',
-      font_weight: '700',
-      x_alignment: '50%',
-      y_alignment: '90%',
-      stroke_color: '#333333',
-      stroke_width: '1.05 vmin',
-      background_color: 'rgba(216,216,216,0)',
-      transcript_color: '#04f827',
-      transcript_effect: 'karaoke',
-      background_x_padding: '26%',
-      background_y_padding: '7%',
-      transcript_placement: 'animate',
-      background_border_radius: '28%',
-      transcript_maximum_length: 25,
-    };
+    return getDefaultCaptionProperties();
   }
 
-  // If config provided but no presetId, handle placement separately
-  if (!config.presetId) {
-    const placement = config.placement || 'bottom';
-    const yAlignment = mapPlacementToYAlignment(placement);
-
-    return {
-      width: '90%',
-      height: '100%',
-      font_size: '8 vmin',
-      fill_color: '#ffffff',
-      font_family: 'Montserrat',
-      font_weight: '700',
-      x_alignment: '50%',
-      y_alignment: yAlignment,
-      stroke_color: '#333333',
-      stroke_width: '1.05 vmin',
-      background_color: 'rgba(216,216,216,0)',
-      transcript_color: config.highlightColor || '#04f827',
-      transcript_effect: 'karaoke',
-      background_x_padding: '26%',
-      background_y_padding: '7%',
-      transcript_placement: 'animate',
-      background_border_radius: '28%',
-      transcript_maximum_length: 25,
+  // Handle legacy config format (migrate to enhanced)
+  if ('highlightColor' in config) {
+    const legacyConfig = config as LegacyCaptionConfig;
+    const enhancedConfig: EnhancedCaptionConfig = {
+      enabled: true, // Legacy configs are always enabled
+      presetId: legacyConfig.presetId,
+      placement:
+        legacyConfig.placement === 'middle' ? 'center' : legacyConfig.placement,
+      transcriptColor: legacyConfig.highlightColor,
+      transcriptEffect: 'karaoke', // Default effect for legacy
     };
+    return convertEnhancedConfigToProperties(enhancedConfig);
+  }
+
+  // Handle enhanced config format
+  const enhancedConfig = config as EnhancedCaptionConfig;
+
+  // If captions are disabled, return null (will be handled by disableCaptions method)
+  if (enhancedConfig.enabled === false) {
+    return {};
+  }
+
+  return convertEnhancedConfigToProperties(enhancedConfig);
+}
+
+/**
+ * Convert enhanced configuration to Creatomate properties
+ */
+function convertEnhancedConfigToProperties(
+  config: EnhancedCaptionConfig
+): Record<string, any> {
+  // If config provided but no presetId, use defaults with custom overrides
+  if (!config.presetId) {
+    const defaultProps = getDefaultCaptionProperties();
+    return applyCustomOverrides(defaultProps, config);
   }
 
   // Find the preset, default to karaoke if not found
   const foundPreset = VIDEO_PRESETS.find((p) => p.id === config.presetId);
-  const activePreset = foundPreset || {
-    id: 'karaoke',
-    name: 'Karaoke',
-    font_family: 'Montserrat',
-    font_weight: '700',
+  const activePreset = foundPreset || getKaraokePreset();
+
+  // Convert preset properties to Creatomate format
+  const baseProperties = presetToCreatomateProperties(activePreset);
+
+  // Apply custom overrides from config
+  return applyCustomOverrides(baseProperties, config);
+}
+
+/**
+ * Get default caption properties (Karaoke preset)
+ */
+function getDefaultCaptionProperties(): Record<string, any> {
+  return {
+    width: '90%',
+    height: '100%',
     font_size: '8 vmin',
     fill_color: '#ffffff',
+    font_family: 'Montserrat',
+    font_weight: '700',
+    x_alignment: '50%',
+    y_alignment: '90%',
     stroke_color: '#333333',
     stroke_width: '1.05 vmin',
     background_color: 'rgba(216,216,216,0)',
+    transcript_color: '#04f827',
+    transcript_effect: 'karaoke',
     background_x_padding: '26%',
     background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'karaoke',
     transcript_placement: 'animate',
-    transcript_color: '#04f827',
+    background_border_radius: '28%',
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
   };
+}
 
-  // Map placement to y_alignment
-  // Use config placement if provided, otherwise use preset default
-  const placement = config.placement || activePreset.placement;
-  const yAlignment = mapPlacementToYAlignment(placement);
+/**
+ * Get Karaoke preset as fallback
+ */
+function getKaraokePreset(): VideoPreset {
+  const karaokePreset = VIDEO_PRESETS.find((p) => p.id === 'karaoke');
+  if (!karaokePreset) {
+    // This should never happen since we include karaoke in VIDEO_PRESETS
+    // But provide a safe fallback just in case
+    if (VIDEO_PRESETS.length === 0) {
+      throw new Error('No video presets available');
+    }
+    const firstPreset = VIDEO_PRESETS[0];
+    if (!firstPreset) {
+      throw new Error('No valid video preset found');
+    }
+    return firstPreset;
+  }
+  return karaokePreset;
+}
 
-  // Convert preset properties to Creatomate format
+/**
+ * Convert preset to Creatomate properties
+ */
+function presetToCreatomateProperties(
+  preset: VideoPreset
+): Record<string, any> {
   return {
-    width: activePreset.width,
-    height: activePreset.height,
-    font_size: activePreset.font_size,
-    fill_color: activePreset.fill_color,
-    font_family: activePreset.font_family,
-    font_weight: activePreset.font_weight,
+    width: preset.width,
+    height: preset.height,
+    font_size: preset.font_size,
+    fill_color: preset.fill_color,
+    font_family: preset.font_family,
+    font_weight: preset.font_weight,
     x_alignment: '50%',
-    y_alignment: yAlignment,
-    stroke_color: activePreset.stroke_color,
-    stroke_width: activePreset.stroke_width,
-    background_color: activePreset.background_color || 'rgba(216,216,216,0)',
-    transcript_color: config.highlightColor || activePreset.transcript_color,
-    transcript_effect: activePreset.transcript_effect,
-    background_x_padding: activePreset.background_x_padding || '26%',
-    background_y_padding: activePreset.background_y_padding || '7%',
-    transcript_placement: activePreset.transcript_placement,
-    background_border_radius: activePreset.background_border_radius || '28%',
-    transcript_maximum_length: activePreset.transcript_maximum_length,
+    y_alignment: mapPlacementToYAlignment(preset.placement),
+    stroke_color: preset.stroke_color,
+    stroke_width: preset.stroke_width,
+    background_color: preset.background_color || 'rgba(216,216,216,0)',
+    transcript_color: preset.transcript_color,
+    transcript_effect: preset.transcript_effect,
+    background_x_padding: preset.background_x_padding || '26%',
+    background_y_padding: preset.background_y_padding || '7%',
+    transcript_placement: preset.transcript_placement,
+    background_border_radius: preset.background_border_radius || '28%',
+    transcript_maximum_length: preset.transcript_maximum_length,
   };
+}
+
+/**
+ * Apply custom overrides from enhanced config
+ */
+function applyCustomOverrides(
+  baseProperties: Record<string, any>,
+  config: EnhancedCaptionConfig
+): Record<string, any> {
+  const result = { ...baseProperties };
+
+  // Override placement if specified
+  if (config.placement) {
+    result.y_alignment = mapPlacementToYAlignment(config.placement);
+  }
+
+  // Override transcript color if specified
+  if (config.transcriptColor) {
+    result.transcript_color = config.transcriptColor;
+  }
+
+  // Override transcript effect if specified
+  if (config.transcriptEffect) {
+    result.transcript_effect = config.transcriptEffect;
+  }
+
+  return result;
 }
 
 /**
@@ -220,4 +373,18 @@ export function getAvailablePresetIds(): string[] {
  */
 export function isValidPresetId(presetId: string): boolean {
   return VIDEO_PRESETS.some((preset) => preset.id === presetId);
+}
+
+/**
+ * Get available transcript effects
+ */
+export function getAvailableTranscriptEffects(): string[] {
+  return ['karaoke', 'highlight', 'fade', 'bounce', 'slide', 'enlarge'];
+}
+
+/**
+ * Check if a transcript effect is valid
+ */
+export function isValidTranscriptEffect(effect: string): boolean {
+  return getAvailableTranscriptEffects().includes(effect);
 }
