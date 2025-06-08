@@ -102,8 +102,6 @@ router.post('/creatomate', async (req: Request, res: Response) => {
       updateData = {
         render_status: 'done',
         render_url: webhookData.url,
-        snapshot_url: webhookData.snapshot_url,
-        render_duration: webhookData.duration,
       };
       console.log(
         `✅ Render succeeded for request ${requestId}, URL: ${webhookData.url}`
