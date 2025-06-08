@@ -636,7 +636,7 @@ export class VideoGeneratorService {
       console.log('🚀 Starting Creatomate render...');
 
       // Get the server's base URL for webhook callbacks
-      const baseUrl = process.env.SERVER_BASE_URL || 'http://localhost:3000';
+      const baseUrl = 'https://nodejs-production-a774.up.railway.app';
       const webhookUrl = `${baseUrl}/api/webhooks/creatomate`;
 
       const renderPayload = {

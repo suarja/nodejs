@@ -171,6 +171,7 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
         HttpStatus.NOT_FOUND
       );
     }
+    console.log('videoRequest- +api', videoRequest);
 
     // If the video is still rendering, check Creatomate status
     if (
@@ -194,9 +195,9 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
             await renderResponse.json()
           );
           console.log('Creatomate render status:', renderData.status);
-
+          console.log('Creatomate render data:', renderData);
           // Update database based on Creatomate status
-          if (renderData.status === VideoRequestStatus.COMPLETED) {
+          if (renderData.status === 'succeeded') {
             const { error: updateError } = await supabase
               .from('video_requests')
               .update({
@@ -212,12 +213,15 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
               // Update the response object with the new status
               videoRequest.render_status = 'done';
               videoRequest.render_url = renderData.url;
+              videoRequest.snapshot_url = renderData.snapshot_url;
             }
           } else if (renderData.status === 'failed') {
             const { error: updateError } = await supabase
               .from('video_requests')
               .update({
                 render_status: 'error',
+                snapshot_url: null,
+                error_message: 'Creatomate render failed',
               })
               .eq('id', id);
 
@@ -241,35 +245,6 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
         );
       }
     }
-
-    // Get queue position if still queued
-    let queuePosition: number | undefined;
-    if (videoRequest.status === VideoRequestStatus.QUEUED) {
-      const { count } = await supabase
-        .from('video_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'queued')
-        .lt('created_at', videoRequest.created_at);
-
-      queuePosition = (count || 0) + 1;
-    }
-
-    const response: VideoStatusResponse = {
-      id: videoRequest.id,
-      status: videoRequest.status,
-      queuePosition,
-      estimatedWaitTime: queuePosition
-        ? `${Math.max(1, Math.ceil(queuePosition * 0.5))} minutes`
-        : undefined,
-      progress:
-        videoRequest.status === VideoRequestStatus.RENDERING
-          ? 50
-          : videoRequest.status === VideoRequestStatus.COMPLETED
-          ? 100
-          : 0,
-      error: videoRequest.error_message || undefined,
-      result: videoRequest.result_data || undefined,
-    };
 
     return successResponseExpress(res, videoRequest);
   } catch (error) {
