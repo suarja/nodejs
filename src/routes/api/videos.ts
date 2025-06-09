@@ -167,7 +167,6 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
         HttpStatus.NOT_FOUND
       );
     }
-    console.log('videoRequest- +api', videoRequest);
 
     // If the video is still rendering, check Creatomate status
     if (

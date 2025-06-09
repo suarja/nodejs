@@ -5,7 +5,7 @@ import { ScriptReviewer } from '../scriptReviewer';
 import { CreatomateBuilder } from '../creatomateBuilder';
 import { MODELS } from '../../config/openai';
 import { PromptService } from '../promptService';
-import { convertCaptionConfigToCreatomate } from '../../utils/video/caption-converter';
+import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
 import {
   EditorialProfile,
   VideoGenerationPayload,
@@ -568,7 +568,15 @@ export class VideoGeneratorService {
       );
 
       // Convert caption configuration to Creatomate format
-      const captionStructure = convertCaptionConfigToCreatomate(captionConfig);
+      console.log(
+        '🚧 VideoGenerator: Converting caption config:',
+        JSON.stringify(captionConfig, null, 2)
+      );
+      const captionStructure = convertCaptionConfigToProperties(captionConfig);
+      console.log(
+        '🚧 VideoGenerator: Caption structure after conversion:',
+        JSON.stringify(captionStructure, null, 2)
+      );
 
       // Generate template using CreatomateBuilder with prompt bank system
       const template = await this.creatomateBuilder.buildJson({

@@ -116,17 +116,24 @@ export class VideoValidationService {
       }
 
       // Return validated payload
+      const validatedPayload = {
+        prompt: body.prompt.trim(),
+        systemPrompt: body.systemPrompt?.trim() || '',
+        selectedVideos: body.selectedVideos,
+        editorialProfile: body.editorialProfile,
+        voiceId: body.voiceId,
+        captionConfig: body.captionConfig,
+        outputLanguage: body.outputLanguage,
+      };
+
+      console.log(
+        '🚧 VideoValidationService: Final validated payload captionConfig:',
+        JSON.stringify(validatedPayload.captionConfig, null, 2)
+      );
+
       return {
         success: true,
-        payload: {
-          prompt: body.prompt.trim(),
-          systemPrompt: body.systemPrompt?.trim() || '',
-          selectedVideos: body.selectedVideos,
-          editorialProfile: body.editorialProfile,
-          voiceId: body.voiceId,
-          captionConfig: body.captionConfig,
-          outputLanguage: body.outputLanguage,
-        },
+        payload: validatedPayload,
       };
     } catch (error) {
       // Handle unexpected validation errors
@@ -318,9 +325,20 @@ export class VideoValidationService {
   private static validateCaptionConfig(
     captionConfig: any
   ): ValidationErrorDetails[] {
+    console.log(
+      '🚧 VideoValidationService: Validating caption config:',
+      JSON.stringify(captionConfig, null, 2)
+    );
     const errors: ValidationErrorDetails[] = [];
 
-    if (!isValidCaptionConfig(captionConfig)) {
+    const isValid = isValidCaptionConfig(captionConfig);
+    console.log(
+      '🚧 VideoValidationService: Caption config validation result:',
+      isValid
+    );
+
+    if (!isValid) {
+      console.log('🚧 VideoValidationService: Caption config is INVALID');
       errors.push({
         field: 'captionConfig',
         code: 'INVALID_CAPTION_CONFIG',
@@ -328,6 +346,8 @@ export class VideoValidationService {
           'Caption configuration is invalid. Must include "enabled" boolean property.',
         value: captionConfig,
       });
+    } else {
+      console.log('🚧 VideoValidationService: Caption config is VALID');
     }
 
     return errors;

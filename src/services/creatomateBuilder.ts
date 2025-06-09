@@ -42,7 +42,6 @@ export class CreatomateBuilder {
     script: string,
     selectedVideos: any[]
   ): Promise<any> {
-    console.log('Available videos:', JSON.stringify(selectedVideos, null, 2));
     const completion = await this.openai.chat.completions.create({
       model: this.model,
       messages: [
@@ -233,11 +232,12 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     captionStructure?: any;
     agentPrompt?: string;
   }): Promise<any> {
-    console.log('Building Creatomate JSON template...');
+    console.log('🚧 CreatomateBuilder.buildJson called with params:');
     console.log('Voice ID:', params.voiceId);
+    console.log('Caption structure type:', typeof params.captionStructure);
     console.log(
-      'Caption structure:',
-      params.captionStructure ? 'Provided' : 'Not provided'
+      'Caption structure content:',
+      JSON.stringify(params.captionStructure, null, 2)
     );
 
     // Step 1: Plan the video structure (scene-by-scene)
@@ -306,6 +306,7 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
     template.elements.forEach((element: any) => {
       element.elements.forEach((element: any) => {
         if (element.type === 'video') {
+          console.log('🚧 Fixing video.fit to cover 🚧');
           element.fit = 'cover';
         }
       });
@@ -317,7 +318,12 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
    */
   private handleCaptionConfiguration(template: any, captionConfig: any) {
     // If no caption config provided, apply default configuration
+    console.log(
+      '🚧 handleCaptionConfiguration called with captionConfig:',
+      JSON.stringify(captionConfig, null, 2)
+    );
     if (!captionConfig) {
+      console.log('🚧 No caption configuration provided, using default 🚧');
       const defaultConfig = {
         enabled: true,
         presetId: 'karaoke',
@@ -331,11 +337,15 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
 
     // Check if captions are disabled
     if (captionConfig.enabled === false) {
+      console.log(
+        '🚧 Captions are disabled, removing all subtitle elements 🚧'
+      );
       this.disableCaptions(template);
       return;
     }
 
     // Apply caption configuration
+    console.log('🚧 Applying caption configuration to template 🚧');
     this.fixCaptions(template, captionConfig);
   }
 
@@ -362,6 +372,7 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
   }
 
   private fixCaptions(template: any, captionConfig: any) {
+    console.log('🚧 Fixing captions 🚧');
     // Import the preset converter utility
 
     // Get the properties to apply from the caption configuration
