@@ -372,11 +372,14 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
   }
 
   private fixCaptions(template: any, captionConfig: any) {
-    console.log('🚧 Fixing captions 🚧');
-    // Import the preset converter utility
+    console.log('🚧 Fixing captions with direct config approach 🚧');
 
     // Get the properties to apply from the caption configuration
     const captionProperties = convertCaptionConfigToProperties(captionConfig);
+    console.log(
+      '🚧 Applying caption properties:',
+      JSON.stringify(captionProperties, null, 2)
+    );
 
     // Apply caption configuration to all text elements
     template.elements.forEach((scene: any) => {
@@ -415,6 +418,12 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
 
           // Apply all caption properties, then restore preserved ones
           Object.assign(element, captionProperties, preservedProperties);
+
+          console.log(`🚧 Applied captions to element ${element.id}:`, {
+            transcript_color: element.transcript_color,
+            transcript_effect: element.transcript_effect,
+            y_alignment: element.y_alignment,
+          });
         }
       });
     });
