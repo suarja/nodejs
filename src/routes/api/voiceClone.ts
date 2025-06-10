@@ -69,13 +69,69 @@ router.post("/", upload.array("files", 10), async (req, res) => {
     }
 
     console.log(`📁 Files received: ${files.length} files`);
-    files.forEach((file: any, index: number) => {
+
+    // Validate each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file) {
+        console.log(`❌ File ${i + 1} is undefined`);
+        return res.status(400).json({
+          success: false,
+          error: `File ${i + 1} is missing or invalid`,
+          requestId,
+        });
+      }
+
       console.log(
-        `📄 File ${index + 1}: ${file.originalname}, size: ${
-          file.size
-        }, type: ${file.mimetype}`
+        `📄 File ${i + 1}: ${file.originalname}, size: ${file.size}, type: ${
+          file.mimetype
+        }`
       );
-    });
+
+      // Check for empty files
+      if (file.size === 0) {
+        console.log(`❌ File ${i + 1} is empty: ${file.originalname}`);
+        return res.status(400).json({
+          success: false,
+          error: `File "${file.originalname}" is empty. Please record a valid audio file.`,
+          requestId,
+        });
+      }
+
+      // Check minimum size (at least 1KB for a meaningful audio file)
+      if (file.size < 1000) {
+        console.log(
+          `❌ File ${i + 1} too small: ${file.originalname} (${
+            file.size
+          } bytes)`
+        );
+        return res.status(400).json({
+          success: false,
+          error: `File "${file.originalname}" is too small (${file.size} bytes). Please record at least 3 seconds of audio.`,
+          requestId,
+        });
+      }
+
+      // Check maximum size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        console.log(
+          `❌ File ${i + 1} too large: ${file.originalname} (${(
+            file.size /
+            1024 /
+            1024
+          ).toFixed(1)}MB)`
+        );
+        return res.status(400).json({
+          success: false,
+          error: `File "${file.originalname}" is too large (${(
+            file.size /
+            1024 /
+            1024
+          ).toFixed(1)}MB). Maximum size is 10MB.`,
+          requestId,
+        });
+      }
+    }
 
     // Step 3: Test ElevenLabs API connectivity
     console.log(`🔍 Testing ElevenLabs API connectivity...`);
