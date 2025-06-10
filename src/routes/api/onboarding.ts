@@ -1,9 +1,15 @@
 import express from "express";
 import multer from "multer";
+import { Readable } from "stream";
 import { AuthService } from "../../services/authService";
 import { supabase } from "../../config/supabase";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 const router = express.Router();
+
+// ElevenLabs API configuration
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const elevenLabs = new ElevenLabsClient({ apiKey: ELEVENLABS_API_KEY });
 
 // Configure multer for file uploads
 const upload = multer({
@@ -117,18 +123,105 @@ router.post("/", upload.single("file"), async (req, res) => {
       // Continue anyway
     }
 
-    // Step 5: Process audio file (basic storage for now)
-    console.log(`🎤 Processing audio file...`);
+    // Step 5: Check if user already has a voice clone
+    console.log(`🔍 Checking for existing voice clone...`);
 
-    // For now, we'll just acknowledge the audio without processing
-    // In the future, this could include transcription or voice analysis
+    const { data: existingVoice } = await supabase
+      .from("voice_clones")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    let voiceCreated = false;
+    let voiceId = null;
+
+    if (existingVoice) {
+      console.log(
+        `⚠️ User already has voice clone: ${existingVoice.elevenlabs_voice_id}`
+      );
+      console.log(
+        `📋 Skipping voice creation, creating editorial profile only`
+      );
+      voiceId = existingVoice.elevenlabs_voice_id;
+    } else {
+      // Step 6: Create voice clone from audio file
+      console.log(`🎤 Creating voice clone from audio file...`);
+
+      try {
+        // Validate file size
+        if (file.size < 1000) {
+          console.log(`❌ File too small: ${file.size} bytes`);
+          return res.status(400).json({
+            success: false,
+            error: `Audio file too small (${file.size} bytes). Please record at least 3 seconds of audio.`,
+            requestId,
+          });
+        }
+
+        // Create voice clone using ElevenLabs
+        const voiceName = `${user.email.split("@")[0]}_voice_${Date.now()}`;
+
+        console.log(`📡 Creating voice in ElevenLabs: ${voiceName}`);
+
+        const stream = Readable.from(file.buffer);
+        (stream as any).name = file.originalname;
+
+        const elevenlabsResult = await elevenLabs.voices.ivc.create({
+          files: [stream as any],
+          name: voiceName,
+        });
+
+        if (!elevenlabsResult.voiceId) {
+          throw new Error("ElevenLabs voice creation failed");
+        }
+
+        console.log(
+          `✅ Voice created in ElevenLabs: ${elevenlabsResult.voiceId}`
+        );
+
+        // Save voice to database
+        const { error: voiceError } = await supabase
+          .from("voice_clones")
+          .insert({
+            user_id: user.id,
+            elevenlabs_voice_id: elevenlabsResult.voiceId,
+            status: "ready",
+            sample_files: [
+              {
+                name: file.originalname || "onboarding_recording.m4a",
+                size: file.size,
+              },
+            ],
+          });
+
+        if (voiceError) {
+          console.log(`❌ Voice database save failed:`, voiceError);
+          // Continue anyway, the voice exists in ElevenLabs
+        } else {
+          console.log(`✅ Voice saved to database`);
+        }
+
+        voiceCreated = true;
+        voiceId = elevenlabsResult.voiceId;
+      } catch (voiceError: any) {
+        console.log(`❌ Voice creation failed:`, voiceError.message);
+        // Continue with profile creation anyway
+        console.log(`📋 Continuing with editorial profile creation only`);
+      }
+    }
 
     console.log(`✅ Onboarding processed successfully`);
 
-    // Step 6: Return success response
+    // Step 7: Return success response
     return res.status(200).json({
       success: true,
       message: "Onboarding completed successfully",
+      data: {
+        voiceCreated,
+        voiceId,
+        profileCreated: true,
+        existingVoice: !!existingVoice,
+      },
       requestId,
     });
   } catch (error: any) {

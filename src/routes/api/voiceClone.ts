@@ -267,4 +267,179 @@ router.post("/", upload.array("files", 10), async (req, res) => {
   }
 });
 
+/**
+ * Get voice samples endpoint
+ * GET /api/voice-clone/samples/:voiceId
+ */
+router.get("/samples/:voiceId", async (req, res) => {
+  const requestId = `voice-samples-${Date.now()}`;
+
+  try {
+    console.log(`🔍 Voice samples request started: ${requestId}`);
+
+    // Step 1: Authenticate user
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await AuthService.verifyUser(
+      authHeader
+    );
+
+    if (authError) {
+      console.log(`❌ Auth failed for request ${requestId}:`, authError);
+      return res.status(authError.status).json(authError);
+    }
+
+    const { voiceId } = req.params;
+
+    if (!voiceId) {
+      return res.status(400).json({
+        success: false,
+        error: "Voice ID is required",
+        requestId,
+      });
+    }
+
+    // Step 2: Verify this voice belongs to the user
+    const { data: voiceClone } = await supabase
+      .from("voice_clones")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("elevenlabs_voice_id", voiceId)
+      .single();
+
+    if (!voiceClone) {
+      return res.status(404).json({
+        success: false,
+        error: "Voice not found or access denied",
+        requestId,
+      });
+    }
+
+    // Step 3: Get voice details from ElevenLabs
+    console.log(`📡 Fetching voice details from ElevenLabs: ${voiceId}`);
+
+    try {
+      const voice = await elevenLabs.voices.get(voiceId);
+
+      console.log(
+        `✅ Voice details retrieved: ${voice.samples?.length || 0} samples`
+      );
+
+      return res.status(200).json({
+        success: true,
+        samples: voice.samples || [],
+        requestId,
+      });
+    } catch (elevenLabsError: any) {
+      console.log(`❌ ElevenLabs API error:`, elevenLabsError.message);
+      return res.status(502).json({
+        success: false,
+        error: `ElevenLabs error: ${elevenLabsError.message}`,
+        requestId,
+      });
+    }
+  } catch (error: any) {
+    console.error(`❌ Voice samples request failed:`, error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Internal server error",
+      requestId,
+    });
+  }
+});
+
+/**
+ * Get voice sample audio endpoint
+ * GET /api/voice-clone/samples/:voiceId/:sampleId/audio
+ */
+router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
+  const requestId = `voice-sample-audio-${Date.now()}`;
+
+  try {
+    console.log(`🔊 Voice sample audio request started: ${requestId}`);
+
+    // Step 1: Authenticate user (via token in query params for audio streaming)
+    const token = req.query.token as string;
+    const { user, errorResponse: authError } = await AuthService.verifyUser(
+      `Bearer ${token}`
+    );
+
+    if (authError) {
+      console.log(`❌ Auth failed for request ${requestId}:`, authError);
+      return res.status(authError.status).json(authError);
+    }
+
+    const { voiceId, sampleId } = req.params;
+
+    if (!voiceId || !sampleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Voice ID and Sample ID are required",
+        requestId,
+      });
+    }
+
+    // Step 2: Verify this voice belongs to the user
+    const { data: voiceClone } = await supabase
+      .from("voice_clones")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("elevenlabs_voice_id", voiceId)
+      .single();
+
+    if (!voiceClone) {
+      return res.status(404).json({
+        success: false,
+        error: "Voice not found or access denied",
+        requestId,
+      });
+    }
+
+    // Step 3: Redirect to ElevenLabs audio URL (more efficient than proxying)
+    const elevenLabsAudioUrl = `https://api.elevenlabs.io/v1/voices/${voiceId}/samples/${sampleId}/audio`;
+
+    console.log(`🔄 Redirecting to ElevenLabs audio: ${voiceId}/${sampleId}`);
+
+    // Instead of proxying, we'll fetch and stream
+    try {
+      const elevenLabsResponse = await fetch(elevenLabsAudioUrl, {
+        headers: {
+          "xi-api-key": ELEVENLABS_API_KEY!,
+        },
+      });
+
+      if (!elevenLabsResponse.ok) {
+        throw new Error(
+          `ElevenLabs responded with ${elevenLabsResponse.status}`
+        );
+      }
+
+      // Stream the audio directly
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="sample_${sampleId}.mp3"`
+      );
+
+      // Convert ReadableStream to Buffer for Node.js compatibility
+      const arrayBuffer = await elevenLabsResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      res.send(buffer);
+    } catch (elevenLabsError: any) {
+      console.log(`❌ ElevenLabs audio error:`, elevenLabsError.message);
+      return res.status(502).json({
+        success: false,
+        error: `ElevenLabs audio error: ${elevenLabsError.message}`,
+        requestId,
+      });
+    }
+  } catch (error: any) {
+    console.error(`❌ Voice sample audio request failed:`, error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Internal server error",
+      requestId,
+    });
+  }
+});
+
 export default router;
