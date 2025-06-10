@@ -423,7 +423,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
       // Convert ReadableStream to Buffer for Node.js compatibility
       const arrayBuffer = await elevenLabsResponse.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      res.send(buffer);
+      return res.send(buffer);
     } catch (elevenLabsError: any) {
       console.log(`❌ ElevenLabs audio error:`, elevenLabsError.message);
       return res.status(502).json({
