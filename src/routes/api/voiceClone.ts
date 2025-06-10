@@ -352,27 +352,24 @@ router.get("/samples/:voiceId", async (req, res) => {
 });
 
 /**
- * Get voice sample audio endpoint
- * GET /api/voice-clone/samples/:voiceId/:sampleId/audio
+ * Get temporary audio URL endpoint
+ * POST /api/voice-clone/samples/:voiceId/:sampleId/audio-url
  */
-router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
-  const requestId = `voice-sample-audio-${Date.now()}`;
+router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
+  const requestId = `voice-audio-url-${Date.now()}`;
 
   try {
-    console.log(`🔊 Voice sample audio request started: ${requestId}`);
+    console.log(`🔊 Voice audio URL request started: ${requestId}`);
 
-    // Step 1: Authenticate user (via token in query params for audio streaming)
-    const token = req.query.token as string;
+    // Step 1: Authenticate user (proper header auth)
+    const authHeader = req.headers.authorization;
     const { user, errorResponse: authError } = await AuthService.verifyUser(
-      `Bearer ${token}`
+      authHeader
     );
 
     if (authError) {
       console.log(`❌ Auth failed for request ${requestId}:`, authError);
-      console.log(`🔍 Debug token value: ${token ? "present" : "missing"}`);
-      // For now, proceed without auth but log it
-      console.log(`⚠️ Proceeding without strict auth for testing`);
-      // return res.status(authError.status).json(authError);
+      return res.status(authError.status).json(authError);
     }
 
     const { voiceId, sampleId } = req.params;
@@ -385,32 +382,119 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
       });
     }
 
-    // Step 2: Verify this voice belongs to the user (skip if auth failed)
-    if (user) {
-      const { data: voiceClone } = await supabase
-        .from("voice_clones")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("elevenlabs_voice_id", voiceId)
-        .single();
+    // Step 2: Verify this voice belongs to the user
+    const { data: voiceClone } = await supabase
+      .from("voice_clones")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("elevenlabs_voice_id", voiceId)
+      .single();
 
-      if (!voiceClone) {
-        return res.status(404).json({
-          success: false,
-          error: "Voice not found or access denied",
-          requestId,
-        });
-      }
-    } else {
-      console.log(`⚠️ TEMP: Skipping voice ownership check for testing`);
+    if (!voiceClone) {
+      return res.status(404).json({
+        success: false,
+        error: "Voice not found or access denied",
+        requestId,
+      });
     }
 
-    // Step 3: Redirect to ElevenLabs audio URL (more efficient than proxying)
+    // Step 3: Generate temporary access token (valid for 5 minutes)
+    const tempToken = Buffer.from(
+      JSON.stringify({
+        userId: user.id,
+        voiceId,
+        sampleId,
+        expires: Date.now() + 5 * 60 * 1000, // 5 minutes
+      })
+    ).toString("base64");
+
+    // Return the URL with temp token
+    const audioUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/api/voice-clone/samples/${voiceId}/${sampleId}/audio?temp=${tempToken}`;
+
+    console.log(`✅ Generated temporary audio URL for ${sampleId}`);
+
+    return res.status(200).json({
+      success: true,
+      audioUrl,
+      expiresIn: 300, // 5 minutes
+      requestId,
+    });
+  } catch (error: any) {
+    console.error(`❌ Voice audio URL request failed:`, error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Internal server error",
+      requestId,
+    });
+  }
+});
+
+/**
+ * Get voice sample audio endpoint (with temporary token)
+ * GET /api/voice-clone/samples/:voiceId/:sampleId/audio
+ */
+router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
+  const requestId = `voice-sample-audio-${Date.now()}`;
+
+  try {
+    console.log(`🔊 Voice sample audio request started: ${requestId}`);
+
+    const { voiceId, sampleId } = req.params;
+    const tempToken = req.query.temp as string;
+
+    if (!voiceId || !sampleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Voice ID and Sample ID are required",
+        requestId,
+      });
+    }
+
+    // Step 1: Validate temporary token
+    if (!tempToken) {
+      return res.status(401).json({
+        success: false,
+        error: "Temporary token required",
+        requestId,
+      });
+    }
+
+    let tokenData;
+    try {
+      tokenData = JSON.parse(Buffer.from(tempToken, "base64").toString());
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid temporary token",
+        requestId,
+      });
+    }
+
+    // Check token expiration
+    if (Date.now() > tokenData.expires) {
+      return res.status(401).json({
+        success: false,
+        error: "Temporary token expired",
+        requestId,
+      });
+    }
+
+    // Verify token matches request
+    if (tokenData.voiceId !== voiceId || tokenData.sampleId !== sampleId) {
+      return res.status(401).json({
+        success: false,
+        error: "Token does not match request",
+        requestId,
+      });
+    }
+
+    // Step 2: Stream audio from ElevenLabs
     const elevenLabsAudioUrl = `https://api.elevenlabs.io/v1/voices/${voiceId}/samples/${sampleId}/audio`;
 
-    console.log(`🔄 Redirecting to ElevenLabs audio: ${voiceId}/${sampleId}`);
+    console.log(`🔄 Streaming ElevenLabs audio: ${voiceId}/${sampleId}`);
 
-    // Instead of proxying, we'll fetch and stream
     try {
       const elevenLabsResponse = await fetch(elevenLabsAudioUrl, {
         headers: {
