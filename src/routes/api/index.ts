@@ -4,6 +4,7 @@ import { uploadS3Handler } from './s3Upload';
 import { generateVideoHandler, getVideoStatusHandler } from './videos';
 import promptsRouter from './prompts';
 import webhooksRouter from './webhooks';
+import voiceCloneRouter from './voiceClone';
 
 const apiRouter = express.Router();
 
@@ -28,6 +29,9 @@ apiRouter.use('/prompts', promptsRouter);
 
 // Webhook endpoints
 apiRouter.use('/webhooks', webhooksRouter);
+
+// Voice clone endpoints
+apiRouter.use('/voice-clone', voiceCloneRouter);
 
 // List video requests endpoint
 apiRouter.get('/videos', async (req, res) => {
