@@ -23,8 +23,14 @@ export class ClerkAuthService {
   static async verifyUser(
     authHeader?: string | null
   ): Promise<ClerkAuthResult> {
+    console.log(
+      "🔍 ClerkAuthService.verifyUser called with header:",
+      authHeader ? "Present" : "Missing"
+    );
+
     // Check if auth header exists
     if (!authHeader) {
+      console.log("❌ No authorization header provided");
       return {
         user: null,
         clerkUser: null,
@@ -38,14 +44,44 @@ export class ClerkAuthService {
 
     // Get token from header
     const token = authHeader.replace("Bearer ", "");
+    console.log("🔍 Extracted token length:", token.length);
+    console.log("🔍 Token preview:", token.substring(0, 50) + "...");
+
+    // Basic JWT format validation
+    const jwtParts = token.split(".");
+    console.log("🔍 JWT parts count:", jwtParts.length);
+
+    if (jwtParts.length !== 3) {
+      console.log(
+        "❌ Invalid JWT format - should have 3 parts separated by dots"
+      );
+      return {
+        user: null,
+        clerkUser: null,
+        errorResponse: {
+          success: false,
+          error:
+            "Invalid JWT format - token should have 3 parts separated by dots",
+          status: 401,
+        },
+      };
+    }
 
     try {
+      console.log("🔍 Attempting to verify token with Clerk...");
+
       // Verify JWT token with Clerk using the standalone verifyToken function
       const verifiedToken = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY!,
       });
 
+      console.log(
+        "✅ Token verified successfully:",
+        verifiedToken ? "Valid" : "Invalid"
+      );
+
       if (!verifiedToken || !verifiedToken.sub) {
+        console.log("❌ Token verification failed - no sub claim");
         return {
           user: null,
           clerkUser: null,
@@ -57,10 +93,13 @@ export class ClerkAuthService {
         };
       }
 
+      console.log("🔍 Clerk user ID from token:", verifiedToken.sub);
+
       // Get Clerk user details using the user ID from the token
       const clerkUser = await this.clerkClient.users.getUser(verifiedToken.sub);
 
       if (!clerkUser) {
+        console.log("❌ Clerk user not found for ID:", verifiedToken.sub);
         return {
           user: null,
           clerkUser: null,
@@ -72,7 +111,18 @@ export class ClerkAuthService {
         };
       }
 
+      console.log(
+        "✅ Clerk user found:",
+        clerkUser.id,
+        clerkUser.emailAddresses[0]?.emailAddress
+      );
+
       // Get database user using Clerk user ID
+      console.log(
+        "🔍 Looking up database user with clerk_user_id:",
+        clerkUser.id
+      );
+
       const { data: databaseUser, error: dbError } = await supabase
         .from("users")
         .select("id, email, full_name, avatar_url, role, clerk_user_id")
@@ -81,6 +131,9 @@ export class ClerkAuthService {
 
       if (dbError || !databaseUser) {
         console.error("❌ Database user lookup error:", dbError);
+        console.log(
+          "🔍 This might mean the user needs to complete onboarding to create database record"
+        );
         return {
           user: null,
           clerkUser: clerkUser,
@@ -102,14 +155,22 @@ export class ClerkAuthService {
         clerkUser: clerkUser, // Clerk user with Clerk details
         errorResponse: null,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Clerk auth service error:", error);
+      console.error("❌ Error details:", {
+        name: error?.name || "Unknown",
+        message: error?.message || "Unknown error",
+        token: token.substring(0, 50) + "...",
+      });
+
       return {
         user: null,
         clerkUser: null,
         errorResponse: {
           success: false,
-          error: "Authentication service error",
+          error:
+            "Authentication service error: " +
+            (error?.message || "Unknown error"),
           status: 500,
         },
       };

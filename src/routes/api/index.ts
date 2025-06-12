@@ -2,10 +2,10 @@ import express from "express";
 import { ClerkAuthService } from "../../services/clerkAuthService";
 import { uploadS3Handler } from "./s3Upload";
 import { generateVideoHandler, getVideoStatusHandler } from "./videos";
-import { 
-  saveSourceVideoHandler, 
-  getSourceVideosHandler, 
-  updateSourceVideoHandler 
+import {
+  saveSourceVideoHandler,
+  getSourceVideosHandler,
+  updateSourceVideoHandler,
 } from "./sourceVideos";
 import promptsRouter from "./prompts";
 import webhooksRouter from "./webhooks";
@@ -21,6 +21,55 @@ apiRouter.get("/health", (req, res) => {
     message: "API is healthy",
     timestamp: new Date().toISOString(),
   });
+});
+
+// Auth test endpoint for debugging
+apiRouter.get("/auth-test", async (req, res) => {
+  try {
+    console.log("🧪 Auth test endpoint called");
+    console.log("🔍 Headers received:", JSON.stringify(req.headers, null, 2));
+
+    const authHeader = req.headers.authorization;
+    console.log("🔍 Authorization header:", authHeader ? "Present" : "Missing");
+
+    if (!authHeader) {
+      return res.status(400).json({
+        success: false,
+        error: "No Authorization header provided",
+        hint: "Include Authorization: Bearer <clerk-jwt-token> in your request",
+      });
+    }
+
+    const { user, clerkUser, errorResponse } =
+      await ClerkAuthService.verifyUser(authHeader);
+
+    if (errorResponse) {
+      return res.status(errorResponse.status).json(errorResponse);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Authentication successful!",
+      data: {
+        clerkUser: {
+          id: clerkUser?.id,
+          email: clerkUser?.emailAddresses[0]?.emailAddress,
+        },
+        databaseUser: {
+          id: user?.id,
+          email: user?.email,
+          full_name: user?.full_name,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("❌ Auth test error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error during auth test",
+      details: error?.message || "Unknown error",
+    });
+  }
 });
 
 // S3 upload endpoint (auth handled in the handler)
@@ -52,9 +101,8 @@ apiRouter.get("/videos", async (req, res) => {
   try {
     // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
-      authHeader
-    );
+    const { user, errorResponse: authError } =
+      await ClerkAuthService.verifyUser(authHeader);
 
     if (authError) {
       return res.status(authError.status).json(authError);
