@@ -1,17 +1,17 @@
-import { Request, Response } from 'express';
-import { supabase } from '../../config/supabase';
-import { AuthService } from '../../services/authService';
-import { VideoValidationService } from '../../services/video/validation';
+import { Request, Response } from "express";
+import { supabase } from "../../config/supabase";
+import { ClerkAuthService } from "../../services/clerkAuthService";
+import { VideoValidationService } from "../../services/video/validation";
 import {
   VideoGeneratorService,
   VideoRequestStatus,
-} from '../../services/video/generator';
+} from "../../services/video/generator";
 import {
   successResponseExpress,
   errorResponseExpress,
   HttpStatus,
-} from '../../utils/api/responses';
-import { CreatomateRenderResponseSchema } from '../../types/renders';
+} from "../../utils/api/responses";
+import { CreatomateRenderResponseSchema } from "../../types/renders";
 
 /**
  * Video generation API controller matching the original mobile app
@@ -20,30 +20,37 @@ import { CreatomateRenderResponseSchema } from '../../types/renders';
  * then processes in the background
  */
 export async function generateVideoHandler(req: Request, res: Response) {
-  console.log('🎬 Starting video generation request...');
+  console.log("🎬 Starting video generation request...");
 
   try {
-    // Step 1: Authenticate user
+    // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
-      authHeader
-    );
+    const {
+      user,
+      clerkUser,
+      errorResponse: authError,
+    } = await ClerkAuthService.verifyUser(authHeader);
 
     if (authError) {
       return errorResponseExpress(res, authError.error, authError.status);
     }
 
-    console.log('🔐 User authenticated:', user.id);
+    console.log(
+      "🔐 User authenticated - DB ID:",
+      user?.id,
+      "Clerk ID:",
+      clerkUser?.id
+    );
 
     // Step 2: Parse and validate request
     let requestBody;
     try {
       requestBody = req.body;
     } catch (error) {
-      console.error('❌ Invalid JSON in request body:', error);
+      console.error("❌ Invalid JSON in request body:", error);
       return errorResponseExpress(
         res,
-        'Invalid JSON in request body',
+        "Invalid JSON in request body",
         HttpStatus.BAD_REQUEST
       );
     }
@@ -64,7 +71,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     const videoGenerator = new VideoGeneratorService(user);
     const result = await videoGenerator.generateVideo(validationResult.payload);
 
-    console.log('✅ Video generation process initiated successfully');
+    console.log("✅ Video generation process initiated successfully");
 
     // Step 5: Return success response immediately (this is the key difference!)
     return successResponseExpress(
@@ -79,7 +86,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     );
   } catch (error: any) {
     // Log error with stack trace for debugging
-    console.error('❌ Error in video generation:', error);
+    console.error("❌ Error in video generation:", error);
 
     // Determine appropriate status code based on error type
     const statusCode = determineErrorStatusCode(error);
@@ -87,9 +94,9 @@ export async function generateVideoHandler(req: Request, res: Response) {
     // Return error response
     return errorResponseExpress(
       res,
-      error.message || 'Failed to process video request',
+      error.message || "Failed to process video request",
       statusCode,
-      process.env.NODE_ENV === 'development'
+      process.env.NODE_ENV === "development"
         ? { stack: error.stack }
         : undefined
     );
@@ -103,9 +110,9 @@ function determineErrorStatusCode(error: any): number {
   // Database errors
   if (
     error.code &&
-    (error.code.startsWith('22') || // Data exception
-      error.code.startsWith('23') || // Integrity constraint violation
-      error.code === 'PGRST') // PostgREST error
+    (error.code.startsWith("22") || // Data exception
+      error.code.startsWith("23") || // Integrity constraint violation
+      error.code === "PGRST") // PostgREST error
   ) {
     return HttpStatus.BAD_REQUEST;
   }
@@ -113,10 +120,10 @@ function determineErrorStatusCode(error: any): number {
   // Authentication/authorization errors
   if (
     error.message &&
-    (error.message.includes('auth') ||
-      error.message.includes('token') ||
-      error.message.includes('unauthorized') ||
-      error.message.includes('permission'))
+    (error.message.includes("auth") ||
+      error.message.includes("token") ||
+      error.message.includes("unauthorized") ||
+      error.message.includes("permission"))
   ) {
     return HttpStatus.UNAUTHORIZED;
   }
@@ -124,13 +131,13 @@ function determineErrorStatusCode(error: any): number {
   // Missing resources
   if (
     error.message &&
-    (error.message.includes('not found') || error.message.includes('missing'))
+    (error.message.includes("not found") || error.message.includes("missing"))
   ) {
     return HttpStatus.NOT_FOUND;
   }
 
   // External API errors (Creatomate)
-  if (error.message && error.message.includes('Creatomate')) {
+  if (error.message && error.message.includes("Creatomate")) {
     return HttpStatus.SERVICE_UNAVAILABLE;
   }
 
@@ -142,28 +149,27 @@ function determineErrorStatusCode(error: any): number {
 export async function getVideoStatusHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    console.log('id- +api', id);
-    // Step 1: Authenticate user using AuthService
+    console.log("id- +api", id);
+    // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
-      authHeader
-    );
+    const { user, errorResponse: authError } =
+      await ClerkAuthService.verifyUser(authHeader);
 
     if (authError) {
       return errorResponseExpress(res, authError.error, authError.status);
     }
 
     const { data: videoRequest, error } = await supabase
-      .from('video_requests')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', user.id)
+      .from("video_requests")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user!.id)
       .single();
 
     if (error || !videoRequest) {
       return errorResponseExpress(
         res,
-        'Video request not found',
+        "Video request not found",
         HttpStatus.NOT_FOUND
       );
     }
@@ -176,66 +182,66 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
       try {
         // Check Creatomate status
         const url = `https://api.creatomate.com/v1/renders/${videoRequest.render_id}`;
-        console.log('url- +api', url);
+        console.log("url- +api", url);
         const renderResponse = await fetch(url, {
-          method: 'GET',
+          method: "GET",
           headers: {
             Authorization: `Bearer ${process.env.CREATOMATE_API_KEY}`,
           },
         });
-        console.log('renderResponse- +api', renderResponse);
+        console.log("renderResponse- +api", renderResponse);
 
         if (renderResponse.ok) {
           const renderData = CreatomateRenderResponseSchema.parse(
             await renderResponse.json()
           );
-          console.log('Creatomate render status:', renderData.status);
-          console.log('Creatomate render data:', renderData);
+          console.log("Creatomate render status:", renderData.status);
+          console.log("Creatomate render data:", renderData);
           // Update database based on Creatomate status
-          if (renderData.status === 'succeeded') {
+          if (renderData.status === "succeeded") {
             const { error: updateError } = await supabase
-              .from('video_requests')
+              .from("video_requests")
               .update({
                 render_status: VideoRequestStatus.COMPLETED,
                 render_url: renderData.url,
                 snapshot_url: renderData.snapshot_url,
               })
-              .eq('id', id);
+              .eq("id", id);
 
             if (updateError) {
-              console.error('Error updating video status:', updateError);
+              console.error("Error updating video status:", updateError);
             } else {
               // Update the response object with the new status
-              videoRequest.render_status = 'done';
+              videoRequest.render_status = "done";
               videoRequest.render_url = renderData.url;
               videoRequest.snapshot_url = renderData.snapshot_url;
             }
-          } else if (renderData.status === 'failed') {
+          } else if (renderData.status === "failed") {
             const { error: updateError } = await supabase
-              .from('video_requests')
+              .from("video_requests")
               .update({
-                render_status: 'error',
+                render_status: "error",
                 snapshot_url: null,
-                error_message: 'Creatomate render failed',
+                error_message: "Creatomate render failed",
               })
-              .eq('id', id);
+              .eq("id", id);
 
             if (updateError) {
-              console.error('Error updating video status:', updateError);
+              console.error("Error updating video status:", updateError);
             } else {
-              videoRequest.render_status = 'error';
+              videoRequest.render_status = "error";
             }
           }
           // If still 'rendering', no need to update
         } else {
           console.error(
-            'Error checking Creatomate status:',
+            "Error checking Creatomate status:",
             await renderResponse.text()
           );
         }
       } catch (creatomateError) {
         console.error(
-          'Error checking Creatomate render status:',
+          "Error checking Creatomate render status:",
           creatomateError
         );
       }
@@ -243,10 +249,10 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
 
     return successResponseExpress(res, videoRequest);
   } catch (error) {
-    console.error('❌ Video status error:', error);
+    console.error("❌ Video status error:", error);
     return errorResponseExpress(
       res,
-      'Internal server error',
+      "Internal server error",
       HttpStatus.INTERNAL_SERVER_ERROR
     );
   }

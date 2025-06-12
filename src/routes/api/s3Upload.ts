@@ -2,17 +2,17 @@ import { Request, Response } from 'express';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET_NAME } from '../../config/aws';
-import { AuthService } from '../../services/authService';
+import { ClerkAuthService } from '../../services/clerkAuthService';
 
 export async function uploadS3Handler(req: Request, res: Response) {
   try {
     console.log('🔐 S3 upload request received');
-    // Step 1: Authenticate user using AuthService
+    // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, clerkUser, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
-    console.log('🔐 User authenticated for S3 upload:', user);
+    console.log('🔐 User authenticated for S3 upload - DB ID:', user?.id, 'Clerk ID:', clerkUser?.id);
 
     if (authError) {
       return res.status(authError.status).json(authError);
@@ -27,9 +27,9 @@ export async function uploadS3Handler(req: Request, res: Response) {
       });
     }
 
-    // Generate unique file name
+    // Generate unique file name with user ID for organization
     const timestamp = Date.now();
-    const uniqueFileName = `videos/${timestamp}_${fileName}`;
+    const uniqueFileName = `videos/${user!.id}/${timestamp}_${fileName}`;
 
     // Create presigned URL for upload
     const command = new PutObjectCommand({
@@ -45,7 +45,7 @@ export async function uploadS3Handler(req: Request, res: Response) {
     // Public URL for accessing the file after upload
     const publicUrl = `https://${S3_BUCKET_NAME}.s3.amazonaws.com/${uniqueFileName}`;
 
-    console.log(`📦 S3 upload URL generated: ${uniqueFileName}`);
+    console.log(`📦 S3 upload URL generated for user ${user!.id}: ${uniqueFileName}`);
 
     return res.status(200).json({
       success: true,
@@ -53,6 +53,7 @@ export async function uploadS3Handler(req: Request, res: Response) {
         presignedUrl,
         publicUrl,
         fileName: uniqueFileName,
+        userId: user!.id, // Return database user ID for frontend reference
       },
     });
   } catch (error) {

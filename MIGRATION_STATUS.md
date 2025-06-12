@@ -89,6 +89,32 @@ Background Processing:
     └── Database (update status)
 ```
 
-## 📊 **Current Status: ~85% Complete**
+## ✅ **COMPLETED PHASE 5: Clerk Authentication Migration (NEW)**
 
-The core video generation pipeline is fully functional and matches the original implementation with the crucial async improvement. Only webhook handling and status checking endpoints remain for a complete migration.
+- [x] **ClerkAuthService** - Complete replacement of Supabase Auth
+  - [x] JWT token verification using Clerk Backend SDK
+  - [x] Database user lookup using `clerk_user_id`
+  - [x] Unified authentication flow (Clerk → Database user)
+- [x] **Updated API Routes** - All routes migrated to ClerkAuthService:
+  - [x] S3 upload endpoint (`/api/s3-upload`)
+  - [x] Source videos endpoints (`/api/source-videos`)
+  - [x] Video generation endpoints (`/api/videos/*`)
+  - [x] Video requests listing endpoint (`/api/videos`)
+- [x] **Source Videos Management** - Complete CRUD operations:
+  - [x] Save source video metadata after S3 upload
+  - [x] Get user's source videos
+  - [x] Update source video metadata
+- [x] **Environment Configuration** - Updated for Clerk integration
+- [x] **Documentation** - Complete setup guide for Clerk integration
+
+## 📊 **Current Status: ~90% Complete**
+
+The core video generation pipeline is fully functional with complete Clerk authentication integration. The major milestone of unified authentication between frontend and backend is now complete. Only webhook handling and final testing remain for a complete migration.
+
+## 🔐 **Authentication Flow**
+
+1. **Frontend**: User signs in with Clerk → Gets JWT token
+2. **API Request**: Frontend sends JWT in `Authorization: Bearer <token>` header
+3. **Backend**: ClerkAuthService verifies JWT with Clerk
+4. **Database Lookup**: Maps Clerk user ID to database user via `clerk_user_id`
+5. **Authorization**: Uses database user ID for all database operations

@@ -1,7 +1,12 @@
 import express from "express";
-import { AuthService } from "../../services/authService";
+import { ClerkAuthService } from "../../services/clerkAuthService";
 import { uploadS3Handler } from "./s3Upload";
 import { generateVideoHandler, getVideoStatusHandler } from "./videos";
+import { 
+  saveSourceVideoHandler, 
+  getSourceVideosHandler, 
+  updateSourceVideoHandler 
+} from "./sourceVideos";
 import promptsRouter from "./prompts";
 import webhooksRouter from "./webhooks";
 import voiceCloneRouter from "./voiceClone";
@@ -21,6 +26,11 @@ apiRouter.get("/health", (req, res) => {
 // S3 upload endpoint (auth handled in the handler)
 apiRouter.post("/s3-upload", uploadS3Handler);
 
+// Source videos endpoints (auth handled in the handlers)
+apiRouter.post("/source-videos", saveSourceVideoHandler);
+apiRouter.get("/source-videos", getSourceVideosHandler);
+apiRouter.put("/source-videos/:videoId", updateSourceVideoHandler);
+
 // Video generation endpoints (auth handled in the handlers)
 apiRouter.post("/videos/generate", generateVideoHandler);
 apiRouter.get("/videos/status/:id", getVideoStatusHandler);
@@ -37,12 +47,12 @@ apiRouter.use("/voice-clone", voiceCloneRouter);
 // Onboarding endpoints
 apiRouter.use("/onboarding", onboardingRouter);
 
-// List video requests endpoint
+// List video requests endpoint (updated to use ClerkAuthService)
 apiRouter.get("/videos", async (req, res) => {
   try {
-    // Step 1: Authenticate user using AuthService
+    // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
@@ -56,7 +66,7 @@ apiRouter.get("/videos", async (req, res) => {
     ).supabase
       .from("video_requests")
       .select("id, status, created_at, payload, result_data, error_message")
-      .eq("user_id", user.id)
+      .eq("user_id", user!.id) // Use database user ID
       .order("created_at", { ascending: false })
       .limit(50);
 
