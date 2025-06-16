@@ -1,9 +1,9 @@
 import express from "express";
 import multer from "multer";
 import { Readable } from "stream";
-import { AuthService } from "../../services/authService";
 import { supabase } from "../../config/supabase";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { ClerkAuthService } from "../../services/clerkAuthService";
 
 const router = express.Router();
 
@@ -29,7 +29,7 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
 

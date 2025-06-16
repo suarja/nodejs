@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { Readable } from "stream";
-import { AuthService } from "../../services/authService";
+import { ClerkAuthService } from '../../services/clerkAuthService';
 import { supabase } from "../../config/supabase";
 import { ElevenLabsClient, stream } from "@elevenlabs/elevenlabs-js";
 
@@ -35,7 +35,7 @@ router.post("/", upload.array("files", 10), async (req, res) => {
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
@@ -279,7 +279,7 @@ router.get("/samples/:voiceId", async (req, res) => {
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
@@ -363,7 +363,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
 
     // Step 1: Authenticate user (proper header auth)
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await AuthService.verifyUser(
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
