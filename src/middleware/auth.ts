@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../services/authService';
+import { Request, Response, NextFunction } from "express";
+import { ClerkAuthService } from "../services/clerkAuthService";
 
 // Extend Express Request type to include user
 declare global {
@@ -23,7 +23,9 @@ export async function authenticateUser(
     const authHeader = req.headers.authorization;
 
     // Use AuthService to verify user (matches mobile app implementation)
-    const { user, errorResponse } = await AuthService.verifyUser(authHeader);
+    const { user, errorResponse } = await ClerkAuthService.verifyUser(
+      authHeader
+    );
 
     if (errorResponse) {
       res.status(errorResponse.status).json(errorResponse);
@@ -40,10 +42,10 @@ export async function authenticateUser(
     console.log(`🔐 User authenticated: ${user.email} (${user.id})`);
     next();
   } catch (error) {
-    console.error('❌ Authentication middleware error:', error);
+    console.error("❌ Authentication middleware error:", error);
     res.status(500).json({
       success: false,
-      error: 'Authentication service error',
+      error: "Authentication service error",
     });
   }
 }
@@ -58,7 +60,9 @@ export async function optionalAuth(
     const authHeader = req.headers.authorization;
 
     // Use AuthService to verify user if header is present
-    const { user, errorResponse } = await AuthService.verifyUser(authHeader);
+    const { user, errorResponse } = await ClerkAuthService.verifyUser(
+      authHeader
+    );
 
     if (!errorResponse && user) {
       req.user = {
@@ -71,7 +75,7 @@ export async function optionalAuth(
 
     next();
   } catch (error) {
-    console.error('❌ Optional auth error:', error);
+    console.error("❌ Optional auth error:", error);
     // Continue without authentication for optional auth
     next();
   }
