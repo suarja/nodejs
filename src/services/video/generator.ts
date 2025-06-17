@@ -213,7 +213,6 @@ export class VideoGeneratorService {
 
       // Step 6: Update video request with completion
       await this.updateVideoRequestWithResults(requestId, {
-        status: VideoRequestStatus.COMPLETED,
         scriptId: script.scriptId,
         renderId,
         script: script.reviewedScript,
@@ -353,7 +352,6 @@ export class VideoGeneratorService {
   private async updateVideoRequestWithResults(
     requestId: string,
     results: {
-      status: VideoRequestStatus;
       scriptId: string;
       renderId: string;
       script: string;
@@ -364,7 +362,6 @@ export class VideoGeneratorService {
       const { error } = await supabase
         .from('video_requests')
         .update({
-          render_status: results.status,
           script_id: results.scriptId,
           render_id: results.renderId,
           completed_at: new Date().toISOString(),

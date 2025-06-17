@@ -9,7 +9,13 @@
     "createdAt": "2025-06-25T10:00:00Z",
     "updatedAt": "2025-06-27T10:00:00Z",
     "author": "AI Team",
-    "tags": ["video", "generation", "captions", "creatomate", "vertical"],
+    "tags": [
+      "video",
+      "generation",
+      "captions",
+      "creatomate",
+      "vertical"
+    ],
     "metadata": {
       "notes": "This enhanced agent handles the caption formatting and video generation using the Creatomate API with stricter vertical video format enforcement (1080x1920).",
       "evaluation": {
@@ -61,7 +67,12 @@
     "createdAt": "2025-06-10T10:00:00Z",
     "updatedAt": "2025-06-10T10:00:00Z",
     "author": "AI Team",
-    "tags": ["video", "generation", "captions", "creatomate"],
+    "tags": [
+      "video",
+      "generation",
+      "captions",
+      "creatomate"
+    ],
     "metadata": {
       "notes": "This agent handles the caption formatting and video generation using the Creatomate API.",
       "evaluation": {
@@ -108,7 +119,12 @@
     "createdAt": "2025-06-10T10:00:00Z",
     "updatedAt": "2025-06-10T10:00:00Z",
     "author": "AI Team",
-    "tags": ["video", "generation", "creatomate", "template"],
+    "tags": [
+      "video",
+      "generation",
+      "creatomate",
+      "template"
+    ],
     "metadata": {
       "notes": "This agent handles the creation of Creatomate JSON templates for the video generation service.",
       "evaluation": {
@@ -151,7 +167,13 @@
     "createdAt": "2025-06-05T10:00:00Z",
     "updatedAt": "2025-01-03T15:30:00Z",
     "author": "AI Team",
-    "tags": ["enhancement", "prompt", "optimization", "video", "script"],
+    "tags": [
+      "enhancement",
+      "prompt",
+      "optimization",
+      "video",
+      "script"
+    ],
     "metadata": {
       "notes": "Enhanced for video pipeline alignment - focuses on script-ready prompts for TikTok-style content generation. Optimized for 30-60 second video scripts with 60-120 word targets. Removed scene/editing focus to align with scriptGenerator and scriptReviewer workflow.",
       "evaluation": {
@@ -258,7 +280,13 @@
     "createdAt": "2025-06-15T10:00:00Z",
     "updatedAt": "2025-01-03T15:40:00Z",
     "author": "AI Team",
-    "tags": ["generation", "prompt", "system prompt", "video", "script"],
+    "tags": [
+      "generation",
+      "prompt",
+      "system prompt",
+      "video",
+      "script"
+    ],
     "metadata": {
       "notes": "Enhanced for video script pipeline - generates system prompts specifically for script creation workflows, focusing on TTS optimization and narrative structure without visual/editing concerns.",
       "evaluation": {
