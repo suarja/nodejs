@@ -302,12 +302,16 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
 }
   */
   private fixTemplate(template: any) {
-    // Fix the elements.video.fit to be cover
+    // Fix the elements.video.fit to be cover and duration to be null
     template.elements.forEach((element: any) => {
       element.elements.forEach((element: any) => {
         if (element.type === 'video') {
           console.log('🚧 Fixing video.fit to cover 🚧');
           element.fit = 'cover';
+          
+          // Ensure video duration is null to limit video to caption/voiceover length
+          console.log('🚧 Setting video.duration to null for TikTok optimization 🚧');
+          element.duration = null;
         }
       });
     });
