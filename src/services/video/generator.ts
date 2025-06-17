@@ -31,9 +31,9 @@ export class VideoGeneratorService {
   private creatomateBuilder: CreatomateBuilder;
 
   // Timeout configurations
-  private static readonly SCRIPT_GENERATION_TIMEOUT = 60000; // 60 seconds
-  private static readonly CREATOMATE_API_TIMEOUT = 120000; // 2 minutes
-  private static readonly DATABASE_OPERATION_TIMEOUT = 30000; // 30 seconds
+  private static readonly SCRIPT_GENERATION_TIMEOUT = 180000; // 3 minutes
+  private static readonly CREATOMATE_API_TIMEOUT = 180000; // 3 minutes
+  private static readonly DATABASE_OPERATION_TIMEOUT = 180000; // 3 minutes
 
   /**
    * Create a new video generator service instance
