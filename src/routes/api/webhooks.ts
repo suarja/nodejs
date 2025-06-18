@@ -141,6 +141,39 @@ router.post('/creatomate', async (req: Request, res: Response) => {
       });
     }
 
+    // Only increment usage counter on successful renders
+    if (webhookData.status === 'succeeded') {
+      try {
+        // Increment user's videos_generated counter by first getting current value
+        const { data: currentUsage, error: fetchError } = await supabase
+          .from('user_usage')
+          .select('videos_generated')
+          .eq('user_id', userId)
+          .single();
+
+        if (fetchError) {
+          console.error('❌ Error fetching current usage:', fetchError);
+          return;
+        }
+
+        const { error: usageError } = await supabase
+          .from('user_usage')
+          .update({ 
+            videos_generated: (currentUsage?.videos_generated || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId);
+        
+        if (usageError) {
+          console.error('❌ Error incrementing videos_generated:', usageError);
+        } else {
+          console.log(`✅ Incremented videos_generated for user ${userId}`);
+        }
+      } catch (error) {
+        console.error('❌ Error updating user usage:', error);
+      }
+    }
+
     // Log the activity (optional, non-blocking)
     try {
       await supabase.from('logs').insert({
