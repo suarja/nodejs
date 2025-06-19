@@ -7,6 +7,14 @@ import {
   getSourceVideosHandler,
   updateSourceVideoHandler,
 } from "./sourceVideos";
+import {
+  getScriptDraftsHandler,
+  getScriptDraftHandler,
+  scriptChatHandler,
+  validateScriptHandler,
+  deleteScriptDraftHandler,
+  duplicateScriptDraftHandler,
+} from "./scripts";
 import promptsRouter from "./prompts";
 import webhooksRouter from "./webhooks";
 import voiceCloneRouter from "./voiceClone";
@@ -83,6 +91,54 @@ apiRouter.put("/source-videos/:videoId", updateSourceVideoHandler);
 // Video generation endpoints (auth handled in the handlers)
 apiRouter.post("/videos/generate", generateVideoHandler);
 apiRouter.get("/videos/status/:id", getVideoStatusHandler);
+
+// Script chat endpoints (NEW)
+apiRouter.get("/scripts", getScriptDraftsHandler);
+apiRouter.get("/scripts/:id", getScriptDraftHandler);
+apiRouter.post("/scripts/chat", scriptChatHandler);
+apiRouter.post("/scripts/:id/validate", validateScriptHandler);
+apiRouter.delete("/scripts/:id", deleteScriptDraftHandler);
+apiRouter.post("/scripts/:id/duplicate", duplicateScriptDraftHandler);
+
+// Test endpoint for streaming (NO AUTH)
+apiRouter.post("/test/streaming", async (req, res) => {
+  console.log("🧪 Test streaming endpoint called");
+  
+  try {
+    const isStreaming = req.body.streaming === true;
+    
+    if (isStreaming) {
+      // Set up streaming response
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      
+      // Send test streaming data
+      res.write('data: {"type": "message_start"}\n\n');
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      res.write('data: {"type": "content_delta", "content": "Bonjour! "}\n\n');
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      res.write('data: {"type": "content_delta", "content": "Ceci est un test de streaming."}\n\n');
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      res.write('data: {"type": "message_complete"}\n\n');
+      
+      res.end();
+    } else {
+      res.json({ 
+        success: true, 
+        message: "Test endpoint working",
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error("❌ Test streaming error:", error);
+    res.status(500).json({ success: false, error: "Test failed" });
+  }
+});
 
 // Prompt enhancement endpoints
 apiRouter.use("/prompts", promptsRouter);

@@ -7,7 +7,7 @@ import {
   errorResponseExpress,
   HttpStatus,
 } from "../../utils/api/responses";
-import { scriptChatRequestSchema } from "../../types/script";
+// import { scriptChatRequestSchema } from "../../types/script";
 
 /**
  * Script Chat API endpoints - New modular system for script generation via chat
@@ -148,30 +148,30 @@ export async function scriptChatHandler(req: Request, res: Response) {
       return errorResponseExpress(res, authError.error, authError.status);
     }
 
-    // Validate request body
-    const validationResult = scriptChatRequestSchema.safeParse(req.body);
-    if (!validationResult.success) {
+    // Simple validation for now (we'll add Zod schema later)
+    const payload = req.body;
+    
+    if (!payload.message || typeof payload.message !== 'string') {
       return errorResponseExpress(
         res,
-        "Invalid request data",
-        HttpStatus.BAD_REQUEST,
-        validationResult.error.errors
+        "Missing or invalid message field",
+        HttpStatus.BAD_REQUEST
       );
     }
 
-    const payload = validationResult.data;
-
     // Check if streaming is requested
-    const isStreaming = req.headers.accept?.includes('text/stream') || 
+    const isStreaming = payload.streaming === true ||
+                       req.headers.accept?.includes('text/event-stream') || 
                        req.query.stream === 'true';
 
     const scriptChatService = new ScriptChatService(user!);
 
     if (isStreaming) {
       // Set up streaming response
-      res.setHeader('Content-Type', 'text/stream');
+      res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
 
       await scriptChatService.handleStreamingChat(payload, res);
     } else {
