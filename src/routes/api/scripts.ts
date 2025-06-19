@@ -68,6 +68,9 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
       );
     }
 
+    console.log(`✅ Found ${scripts?.length || 0} script drafts for user ${user!.id}`);
+    console.log('📝 Scripts data:', JSON.stringify(scripts, null, 2));
+
     return successResponseExpress(res, {
       scripts: scripts || [],
       totalCount: count || 0,
@@ -113,12 +116,17 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
       .single();
 
     if (error || !scriptDraft) {
+      console.error("❌ Script draft not found:", error);
       return errorResponseExpress(
         res,
         "Script draft not found",
         HttpStatus.NOT_FOUND
       );
     }
+
+    console.log(`✅ Script draft found: ${scriptDraft.id}`);
+    console.log(`📝 Messages count: ${scriptDraft.messages?.length || 0}`);
+    console.log(`📄 Current script length: ${scriptDraft.current_script?.length || 0} chars`);
 
     return successResponseExpress(res, scriptDraft);
 
