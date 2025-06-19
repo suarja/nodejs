@@ -3,11 +3,14 @@ import { User } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { supabase } from '../../config/supabase';
 import { createOpenAIClient } from '../../config/openai';
-import { 
+import { PromptService } from '../promptService';
+import type { 
   ScriptChatRequest, 
   ScriptChatResponse, 
   ChatMessage, 
-  ScriptDraft,
+  ScriptDraft
+} from '../../types/script';
+import { 
   estimateScriptDuration,
   generateScriptTitle 
 } from '../../types/script';
@@ -37,37 +40,50 @@ export class ScriptChatService {
   async handleChat(request: ScriptChatRequest): Promise<ScriptChatResponse> {
     try {
       console.log(`💬 Processing chat for user ${this.user.id}`);
+      console.log(`📝 Request message: ${request.message}`);
 
       // Get or create script draft
+      console.log('🔄 Getting or creating script draft...');
       const scriptDraft = await this.getOrCreateScriptDraft(request);
+      console.log(`✅ Script draft: ${scriptDraft.id}`);
       
       // Get editorial profile
+      console.log('👤 Getting editorial profile...');
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
+      console.log(`✅ Editorial profile loaded`);
       
       // Create conversation history
+      console.log('💭 Building conversation history...');
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
         request.message,
         editorialProfile
       );
+      console.log(`✅ Conversation history built: ${conversationHistory.length} messages`);
 
       // Generate response
+      console.log('🤖 Calling OpenAI...');
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: conversationHistory,
         temperature: 0.7,
         max_tokens: 2000,
       });
+      console.log('✅ OpenAI response received');
 
       const assistantMessage = completion.choices[0]?.message?.content;
       if (!assistantMessage) {
         throw new Error('No response generated from OpenAI');
       }
+      console.log(`📝 Assistant message length: ${assistantMessage.length}`);
 
       // Extract script from response
+      console.log('🔍 Extracting script from response...');
       const extractedScript = this.extractScriptFromResponse(assistantMessage);
+      console.log(`✅ Script extracted: ${extractedScript.length} characters`);
       
       // Create chat messages
+      console.log('💬 Creating chat messages...');
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
         role: 'user',
@@ -87,12 +103,15 @@ export class ScriptChatService {
       };
 
       // Update script draft
+      console.log('💾 Updating script draft...');
       const updatedDraft = await this.updateScriptDraft(
         scriptDraft.id,
         extractedScript,
         [userMessage, assistantChatMessage]
       );
+      console.log('✅ Script draft updated successfully');
 
+      console.log('📤 Returning response...');
       return {
         scriptId: updatedDraft.id,
         message: assistantChatMessage,
@@ -346,9 +365,113 @@ export class ScriptChatService {
   }
 
   /**
-   * Build conversation history for OpenAI
+   * Build conversation history for OpenAI using structured prompt design
    */
   private buildConversationHistory(
+    previousMessages: ChatMessage[],
+    currentMessage: string,
+    editorialProfile: any
+  ): any[] {
+    // Get the structured prompt from prompt bank
+    const promptTemplate = PromptService.fillPromptTemplate(
+      'script-chat-conversation-agent',
+      {
+        messageHistory: this.formatMessageHistory(previousMessages),
+        currentMessage: currentMessage,
+        editorialProfile: this.formatEditorialProfile(editorialProfile),
+        outputLanguage: 'fr', // Default to French, should be passed from request
+        currentScript: this.getCurrentScriptFromMessages(previousMessages),
+      }
+    );
+
+    if (!promptTemplate) {
+      // Fallback to basic prompt if template not found
+      console.warn('⚠️ Script chat prompt template not found, using fallback');
+      return this.buildFallbackConversationHistory(previousMessages, currentMessage, editorialProfile);
+    }
+
+    const systemMessage = {
+      role: 'system',
+      content: promptTemplate.system,
+    };
+
+    const userMessage = {
+      role: 'user',
+      content: promptTemplate.user,
+    };
+
+    // Build conversation with system prompt and structured user message
+    const messages = [systemMessage];
+
+    // Add previous conversation history (excluding the current message)
+    previousMessages.forEach(msg => {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      });
+    });
+
+    // Add the structured current message
+    messages.push(userMessage);
+
+    return messages;
+  }
+
+  /**
+   * Format message history for prompt template
+   */
+  private formatMessageHistory(messages: ChatMessage[]): string {
+    if (!messages || messages.length === 0) {
+      return "No previous messages - this is the start of a new conversation.";
+    }
+
+    return messages.map(msg => {
+      const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+      return `[${timestamp}] ${msg.role.toUpperCase()}: ${msg.content}`;
+    }).join('\n\n');
+  }
+
+  /**
+   * Format editorial profile for prompt template
+   */
+  private formatEditorialProfile(profile: any): string {
+    if (!profile) {
+      return "No editorial profile available.";
+    }
+
+    return `
+**Persona:** ${profile.persona_description || 'Non défini'}
+**Ton de voix:** ${profile.tone_of_voice || 'Non défini'}
+**Audience cible:** ${profile.audience || 'Non défini'}
+**Notes de style:** ${profile.style_notes || 'Non défini'}
+    `.trim();
+  }
+
+  /**
+   * Extract current script content from message history
+   */
+  private getCurrentScriptFromMessages(messages: ChatMessage[]): string {
+    if (!messages || messages.length === 0) {
+      return "No current script available.";
+    }
+
+    // Find the most recent script content from assistant messages
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && msg.role === 'assistant' && msg.content) {
+        const script = this.extractScriptFromResponse(msg.content);
+        if (script && script.length > 10) { // Basic validation
+          return script;
+        }
+      }
+    }
+    return "No current script available.";
+  }
+
+  /**
+   * Fallback conversation history builder
+   */
+  private buildFallbackConversationHistory(
     previousMessages: ChatMessage[],
     currentMessage: string,
     editorialProfile: any
