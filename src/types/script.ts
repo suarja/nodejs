@@ -10,6 +10,8 @@ export interface ChatMessage {
     isStreaming?: boolean;
     tokensUsed?: number;
     model?: string;
+    hasScriptUpdate?: boolean;
+    scriptStatus?: string;
   };
 }
 
@@ -48,6 +50,9 @@ export interface ScriptChatResponse {
     wordCount: number;
     estimatedDuration: number;
     suggestedImprovements?: string[];
+    hasScriptUpdate?: boolean;
+    scriptStatus?: string;
+    nextSteps?: string;
   };
 }
 
@@ -94,6 +99,8 @@ export const chatMessageSchema = z.object({
     isStreaming: z.boolean().optional(),
     tokensUsed: z.number().optional(),
     model: z.string().optional(),
+    hasScriptUpdate: z.boolean().optional(),
+    scriptStatus: z.string().optional(),
   }).optional(),
 });
 

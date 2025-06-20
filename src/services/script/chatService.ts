@@ -61,13 +61,14 @@ export class ScriptChatService {
       );
       console.log(`✅ Conversation history built: ${conversationHistory.length} messages`);
 
-      // Generate response
-      console.log('🤖 Calling OpenAI...');
+      // Generate response with structured output
+      console.log('🤖 Calling OpenAI with structured output...');
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: conversationHistory,
         temperature: 0.7,
         max_tokens: 2000,
+        response_format: { type: "json_object" },
       });
       console.log('✅ OpenAI response received');
 
@@ -77,10 +78,14 @@ export class ScriptChatService {
       }
       console.log(`📝 Assistant message length: ${assistantMessage.length}`);
 
-      // Extract script from response
-      console.log('🔍 Extracting script from response...');
-      const extractedScript = this.extractScriptFromResponse(assistantMessage);
-      console.log(`✅ Script extracted: ${extractedScript.length} characters`);
+      // Parse structured response
+      console.log('🔍 Parsing structured response...');
+      const structuredResponse = this.parseStructuredResponse(assistantMessage);
+      console.log(`✅ Structured response parsed:`, {
+        hasScript: !!structuredResponse.script,
+        hasScriptUpdate: structuredResponse.hasScriptUpdate,
+        conversationLength: structuredResponse.conversation.length
+      });
       
       // Create chat messages
       console.log('💬 Creating chat messages...');
@@ -94,19 +99,26 @@ export class ScriptChatService {
       const assistantChatMessage: ChatMessage = {
         id: `msg_${Date.now()}_assistant`,
         role: 'assistant',
-        content: assistantMessage,
+        content: structuredResponse.conversation, // Store only the conversation part
         timestamp: new Date().toISOString(),
         metadata: {
           tokensUsed: completion.usage?.total_tokens,
           model: this.model,
+          hasScriptUpdate: structuredResponse.hasScriptUpdate,
+          scriptStatus: structuredResponse.metadata?.status,
         },
       };
+
+      // Determine script to save (use existing if no update)
+      const scriptToSave = structuredResponse.hasScriptUpdate && structuredResponse.script 
+        ? structuredResponse.script 
+        : scriptDraft.current_script;
 
       // Update script draft
       console.log('💾 Updating script draft...');
       const updatedDraft = await this.updateScriptDraft(
         scriptDraft.id,
-        extractedScript,
+        scriptToSave,
         [userMessage, assistantChatMessage]
       );
       console.log('✅ Script draft updated successfully');
@@ -115,10 +127,13 @@ export class ScriptChatService {
       return {
         scriptId: updatedDraft.id,
         message: assistantChatMessage,
-        currentScript: extractedScript,
+        currentScript: scriptToSave,
         metadata: {
           wordCount: updatedDraft.word_count,
           estimatedDuration: updatedDraft.estimated_duration,
+          hasScriptUpdate: structuredResponse.hasScriptUpdate,
+          scriptStatus: structuredResponse.metadata?.status,
+          nextSteps: structuredResponse.metadata?.nextSteps,
         },
       };
 
@@ -288,7 +303,9 @@ export class ScriptChatService {
     // Calculate metadata
     const wordCount = newScript.split(/\s+/).length;
     const estimatedDuration = estimateScriptDuration(newScript);
-    const title = generateScriptTitle(newScript);
+    
+    // Generate intelligent title from first user message or script content
+    const title = await this.generateIntelligentTitle(newMessages, newScript);
 
          // Get current draft to merge messages
      const { data: currentDraft, error: fetchError } = await supabase
@@ -529,7 +546,118 @@ Si l'utilisateur demande des modifications, applique-les et fournis le script mi
   }
 
   /**
-   * Extract script content from AI response
+   * Generate intelligent title using AI
+   */
+  private async generateIntelligentTitle(messages: ChatMessage[], script: string): Promise<string> {
+    try {
+      // Use the first user message to generate a descriptive title
+      const firstUserMessage = messages.find(msg => msg.role === 'user')?.content;
+      
+      if (!firstUserMessage) {
+        return generateScriptTitle(script);
+      }
+
+      const titlePrompt = `Génère un titre court et descriptif (maximum 6 mots) pour un script vidéo basé sur cette demande utilisateur: "${firstUserMessage}"
+
+Le titre doit être:
+- Court et accrocheur
+- Descriptif du contenu
+- Sans ponctuation finale
+- En français
+
+Exemples:
+- "3 astuces productivité" → "3 Astuces Productivité Essentielles"
+- "expliquer l'IA" → "Comprendre l'IA Simplement"
+- "café bienfaits" → "Bienfaits du Café Santé"
+
+Réponds uniquement avec le titre, sans guillemets ni explications.`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Use faster model for title generation
+        messages: [
+          {
+            role: 'user',
+            content: titlePrompt,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 50,
+      });
+
+      const generatedTitle = completion.choices[0]?.message?.content?.trim();
+      
+      if (generatedTitle && generatedTitle.length <= 50) {
+        return generatedTitle;
+      }
+      
+      // Fallback to simple title generation
+      return generateScriptTitle(script);
+    } catch (error) {
+      console.warn('Failed to generate AI title, using fallback:', error);
+      return generateScriptTitle(script);
+    }
+  }
+
+  /**
+   * Parse structured JSON response from OpenAI
+   */
+  private parseStructuredResponse(response: string): {
+    conversation: string;
+    script?: string;
+    hasScriptUpdate: boolean;
+    metadata?: {
+      wordCount: number;
+      estimatedDuration: number;
+      status: string;
+      nextSteps?: string;
+    };
+  } {
+    try {
+      const parsed = JSON.parse(response);
+      
+      // Validate required fields
+      if (!parsed.conversation) {
+        throw new Error('Missing conversation field in structured response');
+      }
+
+      // Calculate metadata if script is provided
+      let metadata = parsed.metadata || {};
+      if (parsed.script && parsed.hasScriptUpdate) {
+        const words = parsed.script.split(/\s+/).length;
+        metadata = {
+          wordCount: words,
+          estimatedDuration: Math.round(words * 0.4), // ~150 words per minute = 0.4 seconds per word
+          status: metadata.status || 'draft',
+          nextSteps: metadata.nextSteps,
+        };
+      }
+
+      return {
+        conversation: parsed.conversation,
+        script: parsed.script,
+        hasScriptUpdate: Boolean(parsed.hasScriptUpdate),
+        metadata,
+      };
+    } catch (error) {
+      console.warn('⚠️ Failed to parse structured response, falling back to extraction:', error);
+      
+      // Fallback to old extraction method
+      const extractedScript = this.extractScriptFromResponse(response);
+      return {
+        conversation: response,
+        script: extractedScript,
+        hasScriptUpdate: true,
+        metadata: {
+          wordCount: extractedScript.split(/\s+/).length,
+          estimatedDuration: Math.round(extractedScript.split(/\s+/).length * 0.4),
+          status: 'draft',
+        },
+      };
+    }
+  }
+
+  /**
+   * Extract script content from AI response (fallback method)
    */
   private extractScriptFromResponse(response: string): string {
     // Look for script markers or extract the main content
