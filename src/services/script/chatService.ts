@@ -123,6 +123,17 @@ export class ScriptChatService {
       );
       console.log('✅ Script draft updated successfully');
 
+      // Track script version for improvement analytics
+      if (structuredResponse.hasScriptUpdate && structuredResponse.script) {
+        await this.trackScriptVersion(
+          scriptDraft.id,
+          scriptDraft.current_script, // previous version
+          structuredResponse.script, // new version
+          request.message,
+          editorialProfile
+        );
+      }
+
       console.log('📤 Returning response...');
       return {
         scriptId: updatedDraft.id,
@@ -150,11 +161,35 @@ export class ScriptChatService {
     try {
       console.log(`🔄 Processing streaming chat for user ${this.user.id}`);
 
+      // Step 1: Initializing
+      this.sendStreamMessage(res, {
+        type: 'status_update',
+        scriptId: request.scriptId || '',
+        status: 'initializing',
+        message: 'Initialisation de la conversation...',
+      });
+
       // Get or create script draft
       const scriptDraft = await this.getOrCreateScriptDraft(request);
       
+      // Step 2: Loading profile
+      this.sendStreamMessage(res, {
+        type: 'status_update',
+        scriptId: scriptDraft.id,
+        status: 'loading_profile',
+        message: 'Chargement du profil éditorial...',
+      });
+      
       // Get editorial profile
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
+      
+      // Step 3: Building context
+      this.sendStreamMessage(res, {
+        type: 'status_update',
+        scriptId: scriptDraft.id,
+        status: 'building_context',
+        message: 'Analyse du contexte de conversation...',
+      });
       
       // Create conversation history
       const conversationHistory = this.buildConversationHistory(
@@ -163,10 +198,12 @@ export class ScriptChatService {
         editorialProfile
       );
 
-      // Send initial message
+      // Step 4: Start generation
       this.sendStreamMessage(res, {
         type: 'message_start',
         scriptId: scriptDraft.id,
+        status: 'generating',
+        message: 'Génération de la réponse...',
       });
 
       let fullResponse = '';
@@ -193,8 +230,24 @@ export class ScriptChatService {
         }
       }
 
+      // Step 5: Processing response
+      this.sendStreamMessage(res, {
+        type: 'status_update',
+        scriptId: scriptDraft.id,
+        status: 'processing',
+        message: 'Traitement de la réponse...',
+      });
+
       // Extract script and finalize
       const extractedScript = this.extractScriptFromResponse(fullResponse);
+      
+      // Step 6: Updating draft
+      this.sendStreamMessage(res, {
+        type: 'status_update',
+        scriptId: scriptDraft.id,
+        status: 'updating_draft',
+        message: 'Mise à jour du script...',
+      });
       
       // Create chat messages
       const userMessage: ChatMessage = {
@@ -219,6 +272,15 @@ export class ScriptChatService {
         scriptDraft.id,
         extractedScript,
         [userMessage, assistantMessage]
+      );
+
+      // Track script version for improvement analytics
+      await this.trackScriptVersion(
+        scriptDraft.id,
+        scriptDraft.current_script, // previous version
+        extractedScript, // new version
+        request.message,
+        editorialProfile
       );
 
       // Send completion message
@@ -676,6 +738,81 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
 
     // If no markers found, return the full response (assuming it's the script)
     return response.trim();
+  }
+
+  /**
+   * Track script version for analytics and improvement
+   */
+  private async trackScriptVersion(
+    scriptId: string,
+    previousScript: string,
+    newScript: string,
+    userMessage: string,
+    editorialProfile: any
+  ): Promise<void> {
+    try {
+      // Only track if there's an actual change
+      if (previousScript === newScript) return;
+
+      // Log to general logs table
+      await supabase.from('logs').insert({
+        user_id: this.user.id,
+        action: 'script_version_update',
+        resource_type: 'script_draft',
+        resource_id: scriptId,
+        metadata: {
+          previous_script: previousScript,
+          new_script: newScript,
+          user_message: userMessage,
+          editorial_profile: editorialProfile,
+          change_metrics: {
+            word_count_before: previousScript.split(/\s+/).length,
+            word_count_after: newScript.split(/\s+/).length,
+            character_diff: newScript.length - previousScript.length,
+          },
+        },
+      });
+
+      // Track for RL training data (future fine-tuning)
+      await supabase.from('rl_training_data').insert({
+        user_id: this.user.id,
+        input_context: JSON.stringify({
+          previous_script: previousScript,
+          user_feedback: userMessage,
+          editorial_profile: editorialProfile,
+        }),
+        model_output: newScript,
+        feedback_type: 'script_improvement',
+        quality_score: null, // To be filled by user feedback later
+        metadata: {
+          script_id: scriptId,
+          improvement_type: this.classifyImprovementType(userMessage),
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      console.log('✅ Script version tracked for analytics');
+    } catch (error) {
+      console.warn('⚠️ Failed to track script version:', error);
+      // Don't throw - this shouldn't break the main flow
+    }
+  }
+
+  /**
+   * Classify the type of improvement requested
+   */
+  private classifyImprovementType(userMessage: string): string {
+    const message = userMessage.toLowerCase();
+    
+    if (message.includes('émotion') || message.includes('sentiment')) return 'emotional_enhancement';
+    if (message.includes('court') || message.includes('raccourcir')) return 'length_reduction';
+    if (message.includes('long') || message.includes('développer')) return 'length_expansion';
+    if (message.includes('ton') || message.includes('style')) return 'tone_adjustment';
+    if (message.includes('clair') || message.includes('simple')) return 'clarity_improvement';
+    if (message.includes('accroche') || message.includes('hook')) return 'hook_enhancement';
+    if (message.includes('conclusion') || message.includes('fin')) return 'conclusion_improvement';
+    
+    return 'general_improvement';
   }
 
   /**
