@@ -72,12 +72,7 @@ export class VideoGeneratorService {
 
       console.log(`✅ Video request created: ${videoRequest.id} - returning to frontend`);
 
-      // Step 2: Update video request with script ID (synchrone like original)
-      await this.withTimeout(
-        this.updateVideoRequestWithScript(videoRequest.id, scriptDraft.id),
-        VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
-        'Script linking timed out'
-      );
+      // Step 2: Script already linked in createVideoRequestFromScript - no need for additional update
 
       // Step 3: Start background processing (fire and forget) - same as original
       this.processVideoFromScriptInBackground(
@@ -96,7 +91,7 @@ export class VideoGeneratorService {
 
       return {
         requestId: videoRequest.id,
-        scriptId: scriptDraft.id, // Return script ID immediately like original
+        scriptId: '', // Keep consistent with original (frontend doesn't use it anyway)
         status: VideoRequestStatus.QUEUED,
         estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
       };

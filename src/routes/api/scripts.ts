@@ -9,6 +9,49 @@ import {
 } from "../../utils/api/responses";
 import { VideoGeneratorService } from "../../services/video/generator";
 import { VideoValidationService } from "../../services/video/validation";
+
+/**
+ * Determines the appropriate HTTP status code based on error type
+ * (Copied from videos.ts for consistency)
+ */
+function determineErrorStatusCode(error: any): number {
+  // Database errors
+  if (
+    error.code &&
+    (error.code.startsWith("22") || // Data exception
+      error.code.startsWith("23") || // Integrity constraint violation
+      error.code === "PGRST") // PostgREST error
+  ) {
+    return HttpStatus.BAD_REQUEST;
+  }
+
+  // Authentication/authorization errors
+  if (
+    error.message &&
+    (error.message.includes("auth") ||
+      error.message.includes("token") ||
+      error.message.includes("unauthorized") ||
+      error.message.includes("permission"))
+  ) {
+    return HttpStatus.UNAUTHORIZED;
+  }
+
+  // Missing resources
+  if (
+    error.message &&
+    (error.message.includes("not found") || error.message.includes("missing"))
+  ) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  // External API errors (Creatomate)
+  if (error.message && error.message.includes("Creatomate")) {
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  // Default to internal server error
+  return HttpStatus.INTERNAL_SERVER_ERROR;
+}
 // import { scriptChatRequestSchema } from "../../types/script";
 
 /**
@@ -456,17 +499,24 @@ export async function generateVideoFromScriptHandler(req: Request, res: Response
 
     return successResponseExpress(res, {
       requestId: result.requestId,
-      scriptId: scriptId,
+      scriptId: result.scriptId, // Use result.scriptId (empty string for consistency)
       status: result.status,
       estimatedCompletionTime: result.estimatedCompletionTime,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Video generation from script error:", error);
+    
+    // Use same error handling pattern as original endpoint
+    const statusCode = determineErrorStatusCode(error);
+    
     return errorResponseExpress(
       res,
-      "Failed to generate video from script",
-      HttpStatus.INTERNAL_SERVER_ERROR
+      error.message || "Failed to generate video from script",
+      statusCode,
+      process.env.NODE_ENV === "development"
+        ? { stack: error.stack }
+        : undefined
     );
   }
 }
