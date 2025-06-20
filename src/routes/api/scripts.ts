@@ -7,6 +7,8 @@ import {
   errorResponseExpress,
   HttpStatus,
 } from "../../utils/api/responses";
+import { VideoGeneratorService } from "../../services/video/generator";
+import { VideoValidationService } from "../../services/video/validation";
 // import { scriptChatRequestSchema } from "../../types/script";
 
 /**
@@ -374,4 +376,127 @@ export async function duplicateScriptDraftHandler(req: Request, res: Response) {
       HttpStatus.INTERNAL_SERVER_ERROR
     );
   }
+}
+
+/**
+ * POST /api/scripts/:id/generate-video
+ * Generate video from existing script draft
+ */
+export async function generateVideoFromScriptHandler(req: Request, res: Response) {
+  console.log("🎬 Starting video generation from script...");
+
+  try {
+    // Authenticate user
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(authHeader);
+
+    if (authError) {
+      return errorResponseExpress(res, authError.error, authError.status);
+    }
+
+    const { id: scriptId } = req.params;
+
+    // Fetch script draft
+    const { data: scriptDraft, error: scriptError } = await supabase
+      .from('script_drafts')
+      .select('*')
+      .eq('id', scriptId)
+      .eq('user_id', user!.id)
+      .single();
+
+    if (scriptError || !scriptDraft) {
+      return errorResponseExpress(
+        res,
+        "Script draft not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    if (!scriptDraft.current_script?.trim()) {
+      return errorResponseExpress(
+        res,
+        "Script is empty - cannot generate video",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Parse video generation request body
+    const requestBody = req.body;
+    
+    // Create payload for video generation (copying from existing endpoint)
+    const videoPayload = {
+      prompt: scriptDraft.current_script, // Use script as prompt
+      systemPrompt: "Generate video from provided script", // Simple system prompt
+      selectedVideos: requestBody.selectedVideos || [],
+      voiceId: requestBody.voiceId,
+      captionConfig: requestBody.captionConfig,
+      outputLanguage: scriptDraft.output_language || 'fr',
+      editorialProfile: await getEditorialProfileForScript(user!.id, scriptDraft.editorial_profile_id),
+    };
+
+    // Validate video generation payload (reusing existing validation)
+    const validationResult = VideoValidationService.validateRequest(videoPayload);
+    if (!validationResult.success) {
+      return errorResponseExpress(
+        res,
+        validationResult.error.message,
+        validationResult.error.status,
+        validationResult.error.details
+      );
+    }
+
+    // Generate video using existing service (but with script as starting point)
+    const videoGenerator = new VideoGeneratorService(user!);
+    const result = await videoGenerator.generateVideoFromScript(
+      scriptDraft,
+      validationResult.payload
+    );
+
+    console.log("✅ Video generation from script initiated successfully");
+
+    return successResponseExpress(res, {
+      requestId: result.requestId,
+      scriptId: scriptId,
+      status: result.status,
+      estimatedCompletionTime: result.estimatedCompletionTime,
+    });
+
+  } catch (error) {
+    console.error("❌ Video generation from script error:", error);
+    return errorResponseExpress(
+      res,
+      "Failed to generate video from script",
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
+/**
+ * Helper function to get editorial profile for script
+ */
+async function getEditorialProfileForScript(userId: string, profileId?: string) {
+  if (profileId) {
+    const { data: profile } = await supabase
+      .from('editorial_profiles')
+      .select('*')
+      .eq('id', profileId)
+      .eq('user_id', userId)
+      .single();
+    
+    if (profile) return profile;
+  }
+
+  // Fallback to user's default profile
+  const { data: defaultProfile } = await supabase
+    .from('editorial_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  return defaultProfile || {
+    persona_description: 'Créateur de contenu professionnel',
+    tone_of_voice: 'Conversationnel et amical',
+    audience: 'Professionnels',
+    style_notes: 'Communication claire et engageante',
+  };
 } 

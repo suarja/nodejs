@@ -47,6 +47,77 @@ export class VideoGeneratorService {
   }
 
   /**
+   * NEW METHOD: Generate video from existing script (for ChatRequestVideo feature)
+   * Skips script generation and starts directly from script content
+   *
+   * @param scriptDraft The existing script draft
+   * @param payload The video generation payload
+   * @returns The result with request ID for immediate response
+   */
+  async generateVideoFromScript(
+    scriptDraft: any,
+    payload: VideoGenerationPayload
+  ): Promise<VideoGenerationResult> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`🎬 Starting video generation from script ${scriptDraft.id} for user ${this.user.id}`);
+
+      // Step 1: Create video request record FIRST
+      const videoRequest = await this.withTimeout(
+        this.createVideoRequestFromScript(scriptDraft, payload),
+        VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
+        'Database operation timed out'
+      );
+
+      console.log(`✅ Video request created: ${videoRequest.id} - returning to frontend`);
+
+      // Step 2: Start background processing with existing script (no script generation needed)
+      this.processVideoFromScriptInBackground(
+        videoRequest.id,
+        payload,
+        scriptDraft
+      ).catch((error: any) => {
+        console.error(
+          `❌ Background processing failed for request ${videoRequest.id}:`,
+          error
+        );
+      });
+
+      const duration = Date.now() - startTime;
+      console.log(`✅ Video request from script created and returned in ${duration}ms`);
+
+      return {
+        requestId: videoRequest.id,
+        scriptId: scriptDraft.id,
+        status: VideoRequestStatus.QUEUED,
+        estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(
+        `❌ Video generation from script setup failed after ${duration}ms:`,
+        error
+      );
+
+      throw VideoValidationService.createError(
+        error instanceof Error
+          ? error.message
+          : 'Unknown error during video generation from script',
+        'VIDEO_GENERATION_FAILED',
+        {
+          userId: this.user.id,
+          scriptId: scriptDraft.id,
+          duration,
+          originalError: error instanceof Error ? error.message : error,
+        },
+        true,
+        'Video generation failed. Please try again.'
+      );
+    }
+  }
+
+  /**
    * MAIN DIFFERENCE: This now creates the video request and returns immediately,
    * then starts background processing
    *
@@ -143,6 +214,103 @@ export class VideoGeneratorService {
         true, // Retryable
         'Video generation failed. Please try again.'
       );
+    }
+  }
+
+  /**
+   * Background processing method for existing script - this is where the heavy lifting happens
+   * This runs after we've already returned the response to the frontend
+   * Skips script generation since we already have the script
+   */
+  private async processVideoFromScriptInBackground(
+    requestId: string,
+    payload: VideoGenerationPayload,
+    scriptDraft: any
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`🔄 Starting background processing from script for request ${requestId}`);
+
+      // Update status to processing
+      await this.updateVideoRequestStatus(
+        requestId,
+        VideoRequestStatus.RENDERING
+      );
+
+      const { selectedVideos, voiceId, captionConfig, outputLanguage, editorialProfile } = payload;
+
+      // Step 1: Fetch and validate videos (same as original)
+      const videosObj = await this.withTimeout(
+        this.fetchAndValidateVideos(selectedVideos),
+        VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
+        'Video validation timed out'
+      );
+
+      // Step 2: Generate Creatomate template using existing script
+      const template = await this.withTimeout(
+        this.generateTemplate(
+          scriptDraft.current_script, // Use existing script content
+          videosObj,
+          voiceId,
+          editorialProfile,
+          captionConfig,
+          outputLanguage
+        ),
+        VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
+        'Template generation timed out'
+      );
+
+      // Step 3: Store training data (fire and forget)
+      this.storeTrainingDataAsync(
+        `Generated from script: ${scriptDraft.title}`,
+        scriptDraft.current_script,
+        template,
+        requestId
+      ).catch((error) => console.warn('Training data storage failed:', error));
+
+      // Step 4: Start Creatomate render
+      const renderId = await this.withTimeout(
+        this.startCreatomateRender(
+          template,
+          requestId,
+          scriptDraft.id,
+          `Video from script: ${scriptDraft.title}`
+        ),
+        VideoGeneratorService.CREATOMATE_API_TIMEOUT,
+        'Creatomate render start timed out'
+      );
+
+      // Step 5: Update video request with completion
+      await this.updateVideoRequestWithResults(requestId, {
+        scriptId: scriptDraft.id,
+        renderId,
+        script: scriptDraft.current_script,
+        template,
+      });
+
+      const duration = Date.now() - startTime;
+      console.log(
+        `✅ Background processing from script completed for ${requestId} in ${duration}ms`
+      );
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(
+        `❌ Background processing from script failed for ${requestId} after ${duration}ms:`,
+        error
+      );
+
+      // Update request with failure status
+      await this.updateVideoRequestStatus(
+        requestId,
+        VideoRequestStatus.FAILED,
+        error instanceof Error
+          ? error.message
+          : 'Unknown error during processing'
+      );
+
+      // Attempt cleanup on failure
+      await this.cleanupOnFailure(scriptDraft.id, requestId);
     }
   }
 
@@ -267,6 +435,46 @@ export class VideoGeneratorService {
     });
 
     return Promise.race([promise, timeout]);
+  }
+
+  /**
+   * Creates video request record from existing script
+   * @private
+   */
+  private async createVideoRequestFromScript(
+    scriptDraft: any,
+    payload: VideoGenerationPayload
+  ): Promise<{ id: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('video_requests')
+        .insert({
+          user_id: this.user.id,
+          script_id: scriptDraft.id, // Link to existing script
+          render_status: 'queued',
+          selected_videos: payload.selectedVideos.map((v) => v.id),
+          caption_config: payload.captionConfig || null,
+          output_language: payload.outputLanguage || null,
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        throw VideoValidationService.createError(
+          'Failed to create video request from script',
+          'DATABASE_ERROR',
+          { error: error?.message },
+          true,
+          'Unable to queue video request. Please try again.'
+        );
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Database error creating video request from script:', error);
+      throw error;
+    }
   }
 
   /**

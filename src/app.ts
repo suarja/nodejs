@@ -130,6 +130,7 @@ async function startServer() {
       console.log("  POST /api/scripts/:id/validate (✅ Validate script)");
       console.log("  DELETE /api/scripts/:id (🗑️ Delete script)");
       console.log("  POST /api/scripts/:id/duplicate (📋 Duplicate script)");
+      console.log("  POST /api/scripts/:id/generate-video (🎬 Generate video from script)");
       console.log("");
       console.log(
         "🔐 Authentication: All endpoints (except /health) require Clerk JWT token"
