@@ -63,7 +63,7 @@ export class VideoGeneratorService {
     try {
       console.log(`🎬 Starting video generation from script ${scriptDraft.id} for user ${this.user.id}`);
 
-      // Step 1: Create video request record FIRST
+      // Step 1: Create video request record FIRST (this is what we return immediately)
       const videoRequest = await this.withTimeout(
         this.createVideoRequestFromScript(scriptDraft, payload),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
@@ -72,7 +72,14 @@ export class VideoGeneratorService {
 
       console.log(`✅ Video request created: ${videoRequest.id} - returning to frontend`);
 
-      // Step 2: Start background processing with existing script (no script generation needed)
+      // Step 2: Update video request with script ID (synchrone like original)
+      await this.withTimeout(
+        this.updateVideoRequestWithScript(videoRequest.id, scriptDraft.id),
+        VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
+        'Script linking timed out'
+      );
+
+      // Step 3: Start background processing (fire and forget) - same as original
       this.processVideoFromScriptInBackground(
         videoRequest.id,
         payload,
@@ -89,7 +96,7 @@ export class VideoGeneratorService {
 
       return {
         requestId: videoRequest.id,
-        scriptId: scriptDraft.id,
+        scriptId: scriptDraft.id, // Return script ID immediately like original
         status: VideoRequestStatus.QUEUED,
         estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
       };
@@ -550,6 +557,37 @@ export class VideoGeneratorService {
       }
     } catch (error) {
       console.error(`Error updating video request ${requestId}:`, error);
+    }
+  }
+
+  /**
+   * Updates video request with script ID (for script-based generation)
+   * @private
+   */
+  private async updateVideoRequestWithScript(
+    requestId: string,
+    scriptId: string
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('video_requests')
+        .update({
+          script_id: scriptId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requestId);
+
+      if (error) {
+        console.error(
+          `Failed to update video request ${requestId} with script:`,
+          error
+        );
+      }
+    } catch (error) {
+      console.error(
+        `Error updating video request ${requestId} with script:`,
+        error
+      );
     }
   }
 
