@@ -45,6 +45,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     const surveyData = req.body.survey_data
       ? JSON.parse(req.body.survey_data)
       : null;
+    const enableVoiceClone = req.body.enable_voice_clone === 'true';
 
     if (!file) {
       console.log(`❌ No audio file provided for request ${requestId}`);
@@ -58,6 +59,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     console.log(
       `📁 Audio file received: ${file.originalname}, size: ${file.size}, type: ${file.mimetype}`
     );
+    console.log(`🔊 Voice clone enabled: ${enableVoiceClone}`);
 
     // Step 3: Save survey data to database
     if (surveyData) {
@@ -143,8 +145,8 @@ router.post("/", upload.single("file"), async (req, res) => {
         `📋 Skipping voice creation, creating editorial profile only`
       );
       voiceId = existingVoice.elevenlabs_voice_id;
-    } else {
-      // Step 6: Create voice clone from audio file
+    } else if (enableVoiceClone) {
+      // Step 6: Create voice clone from audio file (only if enabled)
       console.log(`🎤 Creating voice clone from audio file...`);
 
       try {
@@ -208,6 +210,8 @@ router.post("/", upload.single("file"), async (req, res) => {
         // Continue with profile creation anyway
         console.log(`📋 Continuing with editorial profile creation only`);
       }
+    } else {
+      console.log(`📋 Voice clone disabled by user preference, skipping voice creation`);
     }
 
     console.log(`✅ Onboarding processed successfully`);
