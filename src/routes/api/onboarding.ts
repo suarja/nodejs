@@ -4,6 +4,7 @@ import { Readable } from "stream";
 import { supabase } from "../../config/supabase";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { ClerkAuthService } from "../../services/clerkAuthService";
+import axios from "axios";
 
 const router = express.Router();
 
@@ -230,6 +231,109 @@ router.post("/", upload.single("file"), async (req, res) => {
     });
   } catch (error: any) {
     console.error(`❌ Onboarding request failed:`, error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Internal server error",
+      requestId,
+    });
+  }
+});
+
+/**
+ * Trigger TikTok Analysis during onboarding
+ * POST /api/onboarding/tiktok-analysis
+ */
+router.post("/tiktok-analysis", async (req, res) => {
+  const requestId = `tiktok-analysis-${Date.now()}`;
+
+  try {
+    console.log(`📱 TikTok Analysis request started: ${requestId}`);
+
+    // Step 1: Authenticate user
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
+      authHeader
+    );
+
+    if (authError) {
+      console.log(`❌ Auth failed for request ${requestId}:`, authError);
+      return res.status(authError.status).json(authError);
+    }
+
+    console.log(`✅ User authenticated: ${user.email} (${user.id})`);
+
+    // Step 2: Validate input
+    const { tiktok_handle } = req.body;
+
+    if (!tiktok_handle || typeof tiktok_handle !== 'string') {
+      console.log(`❌ Invalid TikTok handle for request ${requestId}`);
+      return res.status(400).json({
+        success: false,
+        error: "TikTok handle is required",
+        requestId,
+      });
+    }
+
+    const cleanHandle = tiktok_handle.replace('@', '').trim();
+    console.log(`📱 Processing TikTok handle: @${cleanHandle}`);
+
+    // Step 3: Forward request to TikTok Analyzer
+    const tiktokAnalyzerUrl = process.env.TIKTOK_ANALYZER_URL || 'http://localhost:3001';
+    
+    try {
+      console.log(`📡 Forwarding to TikTok Analyzer: ${tiktokAnalyzerUrl}`);
+      
+      const response = await axios.post(
+        `${tiktokAnalyzerUrl}/api/account-analysis`,
+        {
+          account_handle: cleanHandle,
+          user_context: "onboarding",
+        },
+        {
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000, // 30 seconds timeout
+        }
+      );
+
+      console.log(`✅ TikTok Analyzer response received for ${requestId}`);
+
+      // Step 4: Return the analysis run ID to the client
+      return res.status(200).json({
+        success: true,
+        message: "TikTok analysis started successfully",
+        data: {
+          run_id: response.data.run_id,
+          account_handle: cleanHandle,
+          status: response.data.status || 'processing',
+        },
+        requestId,
+      });
+
+    } catch (tiktokError: any) {
+      console.log(`❌ TikTok Analyzer request failed:`, tiktokError.message);
+      
+      if (tiktokError.response?.status === 403) {
+        return res.status(403).json({
+          success: false,
+          error: "Pro subscription required for TikTok analysis",
+          requestId,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: "TikTok analysis service unavailable",
+        details: tiktokError.message,
+        requestId,
+      });
+    }
+
+  } catch (error: any) {
+    console.error(`❌ TikTok Analysis request failed:`, error);
 
     return res.status(500).json({
       success: false,

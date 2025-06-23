@@ -52,12 +52,18 @@ export class ScriptChatService {
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
       console.log(`✅ Editorial profile loaded`);
       
+      // Get TikTok analysis context
+      console.log('📱 Getting TikTok analysis context...');
+      const tiktokContext = await this.getTikTokAnalysisContext();
+      console.log(tiktokContext ? '✅ TikTok analysis context loaded' : '📭 No TikTok analysis available');
+      
       // Create conversation history
       console.log('💭 Building conversation history...');
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
         request.message,
-        editorialProfile
+        editorialProfile,
+        tiktokContext
       );
       console.log(`✅ Conversation history built: ${conversationHistory.length} messages`);
 
@@ -183,6 +189,9 @@ export class ScriptChatService {
       // Get editorial profile
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
       
+      // Get TikTok analysis context
+      const tiktokContext = await this.getTikTokAnalysisContext();
+      
       // Step 3: Building context
       this.sendStreamMessage(res, {
         type: 'status_update',
@@ -195,7 +204,8 @@ export class ScriptChatService {
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
         request.message,
-        editorialProfile
+        editorialProfile,
+        tiktokContext
       );
 
       // Step 4: Start generation
@@ -449,7 +459,8 @@ export class ScriptChatService {
   private buildConversationHistory(
     previousMessages: ChatMessage[],
     currentMessage: string,
-    editorialProfile: any
+    editorialProfile: any,
+    tiktokContext?: string | null
   ): any[] {
     // Get the structured prompt from prompt bank
     const promptTemplate = PromptService.fillPromptTemplate(
@@ -460,13 +471,14 @@ export class ScriptChatService {
         editorialProfile: this.formatEditorialProfile(editorialProfile),
         outputLanguage: 'fr', // Default to French, should be passed from request
         currentScript: this.getCurrentScriptFromMessages(previousMessages),
+        tiktokAnalysis: tiktokContext || 'Aucune analyse TikTok disponible pour ce compte.',
       }
     );
 
     if (!promptTemplate) {
       // Fallback to basic prompt if template not found
       console.warn('⚠️ Script chat prompt template not found, using fallback');
-      return this.buildFallbackConversationHistory(previousMessages, currentMessage, editorialProfile);
+      return this.buildFallbackConversationHistory(previousMessages, currentMessage, editorialProfile, tiktokContext);
     }
 
     const systemMessage = {
@@ -553,7 +565,8 @@ export class ScriptChatService {
   private buildFallbackConversationHistory(
     previousMessages: ChatMessage[],
     currentMessage: string,
-    editorialProfile: any
+    editorialProfile: any,
+    tiktokContext?: string | null
   ): any[] {
     const systemMessage = {
       role: 'system',
@@ -571,6 +584,8 @@ PROFIL ÉDITORIAL:
 - Ton: ${editorialProfile.tone_of_voice}
 - Audience: ${editorialProfile.audience}
 - Style: ${editorialProfile.style_notes}
+
+${tiktokContext ? `\n${tiktokContext}\n` : ''}
 
 STRUCTURE RECOMMANDÉE:
 1. Accroche (1-2 lignes): captiver l'attention
@@ -820,5 +835,93 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
    */
   private sendStreamMessage(res: Response, data: any): void {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
+  /**
+   * Get TikTok analysis context for the user
+   */
+  private async getTikTokAnalysisContext(): Promise<string | null> {
+    try {
+      console.log('🎯 Getting TikTok analysis context...');
+      
+      // Check if user has a TikTok analysis
+      const { data: analyses } = await supabase
+        .from('account_analyses')
+        .select(`
+          id,
+          account_handle,
+          status,
+          insights,
+          created_at,
+          account_analysis
+        `)
+        .eq('user_id', this.user.id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!analyses || analyses.length === 0) {
+        console.log('📭 No TikTok analysis found for user');
+        return null;
+      }
+
+      const analysis = analyses[0];
+      if (!analysis) {
+        console.log('📭 No valid TikTok analysis found');
+        return null;
+      }
+      
+      console.log(`✅ Found TikTok analysis for @${analysis.account_handle}`);
+
+      // Format analysis context for the agent
+      const context = this.formatTikTokAnalysisContext(analysis);
+      return context;
+
+    } catch (error) {
+      console.error('❌ Error fetching TikTok analysis:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Format TikTok analysis for agent context
+   */
+  private formatTikTokAnalysisContext(analysis: any): string {
+    const accountData = analysis.account_analysis || {};
+    const insights = analysis.insights || {};
+
+    return `## 📱 ANALYSE TIKTOK DISPONIBLE
+
+**Compte analysé :** @${analysis.account_handle}
+**Statut :** ✅ Analyse complète
+
+### 📊 Données du compte
+- **Abonnés :** ${accountData.followers_count?.toLocaleString() || 'N/A'}
+- **Vidéos :** ${accountData.videos_count || 'N/A'}
+- **Taux d'engagement :** ${accountData.engagement_rate || 'N/A'}%
+
+### 🎯 Insights principaux
+${insights.performance_summary ? `**Performance :** ${insights.performance_summary}` : ''}
+
+${insights.content_strategy ? `**Stratégie de contenu :** ${insights.content_strategy}` : ''}
+
+${insights.audience_insights ? `**Audience :** ${insights.audience_insights}` : ''}
+
+### 💪 Forces identifiées
+${insights.strengths ? insights.strengths.map((s: string) => `- ${s}`).join('\n') : 'Non disponible'}
+
+### ⚠️ Points d'amélioration
+${insights.weaknesses ? insights.weaknesses.map((w: string) => `- ${w}`).join('\n') : 'Non disponible'}
+
+### 🚀 Recommandations
+${insights.recommendations ? insights.recommendations.map((r: string) => `- ${r}`).join('\n') : 'Non disponible'}
+
+---
+**💡 Instructions pour l'agent :**
+- Utilise ces données pour personnaliser tes recommandations de script
+- Adapte le style et le ton selon l'analyse de l'audience
+- Propose des sujets alignés avec la stratégie de contenu identifiée
+- Mentionne les forces à capitaliser et les points d'amélioration à adresser
+- Si l'utilisateur demande des conseils spécifiques, référence-toi à cette analyse`;
   }
 } 
