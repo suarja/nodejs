@@ -41,6 +41,7 @@ export class ScriptChatService {
     try {
       console.log(`💬 Processing chat for user ${this.user.id}`);
       console.log(`📝 Request message: ${request.message}`);
+      console.log(`👑 User Pro status: ${request.isPro || false}`);
 
       // Get or create script draft
       console.log('🔄 Getting or creating script draft...');
