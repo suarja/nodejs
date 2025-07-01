@@ -861,8 +861,8 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       if (!scriptDraft) return null;
 
       const { data: analysis } = await supabase
-        .from('account_analyses')
-        .select('account_id, account_handle')
+        .from('analyses')
+        .select('account_id')
         .eq('user_id', scriptDraft.user_id)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
@@ -877,7 +877,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       // ❗ REFACTORED: Fetch the full, comprehensive context via API call
       const accountId = analysis.account_id;
       const analyzerUrl = process.env.ANALYZER_SERVICE_URL || 'http://localhost:3001';
-      const response = await fetch(`${analyzerUrl}/api/v1/account-context/${accountId}`);
+      const response = await fetch(`${analyzerUrl}/api/account-context/${accountId}`);
 
       if (!response.ok) {
         console.warn(`⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`);
