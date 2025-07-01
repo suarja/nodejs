@@ -53,10 +53,15 @@ export class ScriptChatService {
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
       console.log(`✅ Editorial profile loaded`);
       
-      // Get TikTok analysis context
-      console.log('📱 Getting TikTok analysis context...');
-      const tiktokContext = await this.getTikTokAnalysisContext();
-      console.log(tiktokContext ? '✅ TikTok analysis context loaded' : '📭 No TikTok analysis available');
+      // Get editorial profile and TikTok analysis context
+      let tiktokContext: string | null = null;
+      if (request.scriptId) {
+        console.log('📱 Getting TikTok analysis context...');
+        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
+        console.log(tiktokContext ? '✅ TikTok analysis context loaded' : '📭 No TikTok analysis available');
+      } else {
+        console.log('ℹ️ No scriptId provided, skipping TikTok context fetch');
+      }
       
       // Create conversation history
       console.log('💭 Building conversation history...');
@@ -169,12 +174,10 @@ export class ScriptChatService {
       console.log(`🔄 Processing streaming chat for user ${this.user.id}`);
 
       // Step 1: Initializing
-      this.sendStreamMessage(res, {
-        type: 'status_update',
-        scriptId: request.scriptId || '',
-        status: 'initializing',
-        message: 'Initialisation de la conversation...',
-      });
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      this.sendStreamMessage(res, { type: 'status', message: 'Démarrage de la génération du script...' });
 
       // Get or create script draft
       const scriptDraft = await this.getOrCreateScriptDraft(request);
@@ -191,7 +194,10 @@ export class ScriptChatService {
       const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
       
       // Get TikTok analysis context
-      const tiktokContext = await this.getTikTokAnalysisContext();
+      let tiktokContext: string | null = null;
+      if (request.scriptId) {
+        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
+      }
       
       // Step 3: Building context
       this.sendStreamMessage(res, {
@@ -841,45 +847,58 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   /**
    * Get TikTok analysis context for the user
    */
-  private async getTikTokAnalysisContext(): Promise<string | null> {
+  private async getTikTokAnalysisContext(scriptId: string): Promise<string | null> {
     try {
       console.log('🎯 Getting TikTok analysis context...');
       
-      // Check if user has a TikTok analysis
-      const { data: analyses } = await supabase
+      // First, find the account_id associated with this script draft or user
+      const { data: scriptDraft } = await supabase
+        .from('script_drafts')
+        .select('user_id')
+        .eq('id', scriptId)
+        .single();
+      
+      if (!scriptDraft) return null;
+
+      const { data: analysis } = await supabase
         .from('account_analyses')
-        .select(`
-          id,
-          account_handle,
-          status,
-          insights,
-          created_at,
-          account_analysis
-        `)
-        .eq('user_id', this.user.id)
+        .select('account_id, account_handle')
+        .eq('user_id', scriptDraft.user_id)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(1)
+        .single();
 
-      if (!analyses || analyses.length === 0) {
-        console.log('📭 No TikTok analysis found for user');
-        return null;
-      }
-
-      const analysis = analyses[0];
-      if (!analysis) {
-        console.log('📭 No valid TikTok analysis found');
+      if (!analysis || !analysis.account_id) {
+        console.log('📭 No valid TikTok analysis found for this user.');
         return null;
       }
       
-      console.log(`✅ Found TikTok analysis for @${analysis.account_handle}`);
+      // ❗ REFACTORED: Fetch the full, comprehensive context via API call
+      const accountId = analysis.account_id;
+      const analyzerUrl = process.env.ANALYZER_SERVICE_URL || 'http://localhost:3001';
+      const response = await fetch(`${analyzerUrl}/api/v1/account-context/${accountId}`);
+
+      if (!response.ok) {
+        console.warn(`⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`);
+        return null; // or fallback to a basic context
+      }
+
+      const fullContext: any = await response.json();
+
+      if (!fullContext || !fullContext.account) {
+        console.warn(`⚠️ Could not retrieve full context via API for account ${accountId}`);
+        return null;
+      }
+
+      console.log(`✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`);
 
       // Format analysis context for the agent
-      const context = this.formatTikTokAnalysisContext(analysis);
+      const context = this.formatTikTokAnalysisContext(fullContext);
       return context;
 
     } catch (error) {
-      console.error('❌ Error fetching TikTok analysis:', error);
+      console.error('❌ Error fetching TikTok analysis context:', error);
       return null;
     }
   }
@@ -887,42 +906,41 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   /**
    * Format TikTok analysis for agent context
    */
-  private formatTikTokAnalysisContext(analysis: any): string {
-    const accountData = analysis.account_analysis || {};
-    const insights = analysis.insights || {};
+  private formatTikTokAnalysisContext(fullContext: any | null): string {
+    if (!fullContext) {
+      return `## 📱 ANALYSE TIKTOK\n\nL'analyse détaillée du compte n'est pas disponible pour le moment.`;
+    }
 
-    return `## 📱 ANALYSE TIKTOK DISPONIBLE
+    const { account, stats, aggregates, insights } = fullContext;
 
-**Compte analysé :** @${analysis.account_handle}
-**Statut :** ✅ Analyse complète
+    let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
 
-### 📊 Données du compte
-- **Abonnés :** ${accountData.followers_count?.toLocaleString() || 'N/A'}
-- **Vidéos :** ${accountData.videos_count || 'N/A'}
-- **Taux d'engagement :** ${accountData.engagement_rate || 'N/A'}%
+    if (stats) {
+      context += `\n### 📊 Données du compte\n- **Abonnés :** ${stats.followers_count?.toLocaleString() || 'N/A'}\n- **Vidéos :** ${stats.videos_count || 'N/A'}\n- **Taux d'engagement :** ${stats.engagement_rate?.toFixed(2) || 'N/A'}%\n`;
+    }
 
-### 🎯 Insights principaux
-${insights.performance_summary ? `**Performance :** ${insights.performance_summary}` : ''}
+    if (aggregates) {
+      context += `\n### 🚀 Indicateurs Clés\n- **Vues moyennes:** ${Math.round(aggregates.avg_views || 0).toLocaleString()}\n- **Meilleur moment pour poster (UTC):** ${aggregates.best_posting_time || 'N/A'}\n- **Fréquence de publication:** ~${Math.round(aggregates.posting_frequency_weekly || 0)} vidéos/semaine\n`;
+    }
 
-${insights.content_strategy ? `**Stratégie de contenu :** ${insights.content_strategy}` : ''}
+    if (insights) {
+      if (insights.profile_summary) {
+        context += `\n### 🎯 Profil & Audience (par l'IA)\n- **Niche:** ${insights.profile_summary.niche || 'Non définie'}\n- **Audience:** ${insights.profile_summary.audience_profile?.description || 'Non défini'}\n`;
+      }
+      if (insights.content_analysis?.content_pillars) {
+        context += `\n### 🎨 Piliers de Contenu\n${insights.content_analysis.content_pillars.map((p: any) => `- **${p.name}**`).join('\n')}\n`;
+      }
+      if (insights.recommendations?.content_strategy) {
+        context += `\n### 🔥 Recommandation Stratégique Clé\n- ${insights.recommendations.content_strategy[0]?.action}\n`;
+      }
+    }
+    
+    context += `\n---
+**💡 Instructions pour l'agent de script :**
+- Utilise ces données pour personnaliser tes recommandations de script.
+- Adapte le style et le ton selon l'analyse de l'audience.
+- Propose des sujets alignés avec les piliers de contenu et la recommandation stratégique.`;
 
-${insights.audience_insights ? `**Audience :** ${insights.audience_insights}` : ''}
-
-### 💪 Forces identifiées
-${insights.strengths ? insights.strengths.map((s: string) => `- ${s}`).join('\n') : 'Non disponible'}
-
-### ⚠️ Points d'amélioration
-${insights.weaknesses ? insights.weaknesses.map((w: string) => `- ${w}`).join('\n') : 'Non disponible'}
-
-### 🚀 Recommandations
-${insights.recommendations ? insights.recommendations.map((r: string) => `- ${r}`).join('\n') : 'Non disponible'}
-
----
-**💡 Instructions pour l'agent :**
-- Utilise ces données pour personnaliser tes recommandations de script
-- Adapte le style et le ton selon l'analyse de l'audience
-- Propose des sujets alignés avec la stratégie de contenu identifiée
-- Mentionne les forces à capitaliser et les points d'amélioration à adresser
-- Si l'utilisateur demande des conseils spécifiques, référence-toi à cette analyse`;
+    return context;
   }
 } 
