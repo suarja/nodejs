@@ -114,7 +114,6 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
     }
 
     console.log(`✅ Found ${scripts?.length || 0} script drafts for user ${user!.id}`);
-    console.log('📝 Scripts data:', JSON.stringify(scripts, null, 2));
 
     return successResponseExpress(res, {
       scripts: scripts || [],
