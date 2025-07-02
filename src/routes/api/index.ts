@@ -20,6 +20,7 @@ import promptsRouter from "./prompts";
 import webhooksRouter from "./webhooks";
 import voiceCloneRouter from "./voiceClone";
 import onboardingRouter from "./onboarding";
+import supportRouter from "./support";
 
 const apiRouter = express.Router();
 
@@ -153,6 +154,9 @@ apiRouter.use("/voice-clone", voiceCloneRouter);
 
 // Onboarding endpoints
 apiRouter.use("/onboarding", onboardingRouter);
+
+// Support endpoints
+apiRouter.use("/support", supportRouter);
 
 // List video requests endpoint (updated to use ClerkAuthService)
 apiRouter.get("/videos", async (req, res) => {
