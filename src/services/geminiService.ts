@@ -116,31 +116,56 @@ export class GeminiService {
   }
 
   /**
+   * Upload a video buffer to Gemini Files API and return the file reference
+   */
+  private async uploadToGeminiFilesAPI(
+    videoBuffer: Buffer,
+    fileName: string
+  ): Promise<any> {
+    // Gemini Node SDK n'a pas d'API Files officielle, donc on utilise fetch
+    const apiKey = process.env.GOOGLE_API_KEY;
+    const url =
+      "https://generativelanguage.googleapis.com/upload/v1beta/files?key=" +
+      apiKey;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Goog-Upload-File-Name": fileName,
+        "X-Goog-Upload-Protocol": "raw",
+      },
+      body: videoBuffer,
+    });
+    if (!res.ok) {
+      throw new Error(
+        "Failed to upload file to Gemini Files API: " + (await res.text())
+      );
+    }
+    return await res.json();
+  }
+
+  /**
    * Analyze video using Gemini Files API (for videos > 20MB)
    */
   private async analyzeWithFilesAPI(s3Key: string): Promise<VideoAnalysisData> {
     try {
-      // Get presigned URL for S3 file
-      const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
-        Key: s3Key,
-      });
-
-      const presignedUrl = await getSignedUrl(s3Client, command, {
-        expiresIn: 3600, // 1 hour
-      });
-
-      // Use file URL directly with Gemini
-      const fileData = {
-        fileData: {
-          fileUri: presignedUrl,
-        },
-      };
-
-      // Analyze with Gemini
+      // Download video from S3
+      const videoBuffer = await this.downloadFromS3(s3Key);
+      // Upload to Gemini Files API
+      const fileName = s3Key.split("/").pop() || "video.mp4";
+      const fileUploadResult = await this.uploadToGeminiFilesAPI(
+        videoBuffer,
+        fileName
+      );
+      const fileUri = fileUploadResult.file?.uri;
+      if (!fileUri)
+        throw new Error("No file URI returned from Gemini Files API");
+      // Prepare Gemini prompt and file reference
       const prompt = this.getAnalysisPrompt();
-      const result = await this.model.generateContent([prompt, fileData]);
-
+      const result = await this.model.generateContent([
+        prompt,
+        { fileData: { fileUri, mimeType: "video/mp4" } },
+      ]);
       return this.parseAnalysisResult(result.response.text());
     } catch (error) {
       console.error("Error in Files API analysis:", error);
