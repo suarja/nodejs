@@ -1,6 +1,10 @@
 import express from "express";
 import { ClerkAuthService } from "../../services/clerkAuthService";
 import { uploadS3Handler } from "./s3Upload";
+import {
+  videoAnalysisHandler,
+  videoAnalysisHealthHandler,
+} from "./videoAnalysis";
 import { generateVideoHandler, getVideoStatusHandler } from "./videos";
 import {
   saveSourceVideoHandler,
@@ -85,6 +89,10 @@ apiRouter.get("/auth-test", async (req, res) => {
 // S3 upload endpoint (auth handled in the handler)
 apiRouter.post("/s3-upload", uploadS3Handler);
 
+// Video analysis endpoints (auth handled in the handlers)
+apiRouter.post("/video-analysis", videoAnalysisHandler);
+apiRouter.get("/video-analysis/health", videoAnalysisHealthHandler);
+
 // Source videos endpoints (auth handled in the handlers)
 apiRouter.post("/source-videos", saveSourceVideoHandler);
 apiRouter.get("/source-videos", getSourceVideosHandler);
@@ -106,35 +114,37 @@ apiRouter.post("/scripts/:id/generate-video", generateVideoFromScriptHandler);
 // Test endpoint for streaming (NO AUTH)
 apiRouter.post("/test/streaming", async (req, res) => {
   console.log("🧪 Test streaming endpoint called");
-  
+
   try {
     const isStreaming = req.body.streaming === true;
-    
+
     if (isStreaming) {
       // Set up streaming response
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
       // Send test streaming data
       res.write('data: {"type": "message_start"}\n\n');
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
       res.write('data: {"type": "content_delta", "content": "Bonjour! "}\n\n');
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
-      res.write('data: {"type": "content_delta", "content": "Ceci est un test de streaming."}\n\n');
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      res.write(
+        'data: {"type": "content_delta", "content": "Ceci est un test de streaming."}\n\n'
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
       res.write('data: {"type": "message_complete"}\n\n');
-      
+
       res.end();
     } else {
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "Test endpoint working",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   } catch (error) {

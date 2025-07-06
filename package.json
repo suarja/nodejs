@@ -10,6 +10,7 @@
     "@aws-sdk/s3-request-presigner": "^3.825.0",
     "@clerk/backend": "^2.0.0",
     "@elevenlabs/elevenlabs-js": "^2.2.0",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.50.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
