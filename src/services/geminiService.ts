@@ -146,21 +146,38 @@ export class GeminiService {
 
   /**
    * Analyze video using Gemini Files API (for videos > 20MB)
+   * Correction stricte : upload direct du buffer S3 vers Gemini, puis analyse avec fileUri
    */
   private async analyzeWithFilesAPI(s3Key: string): Promise<VideoAnalysisData> {
     try {
-      // Download video from S3
+      // 1. Télécharger la vidéo depuis S3
       const videoBuffer = await this.downloadFromS3(s3Key);
-      // Upload to Gemini Files API
       const fileName = s3Key.split("/").pop() || "video.mp4";
-      const fileUploadResult = await this.uploadToGeminiFilesAPI(
-        videoBuffer,
-        fileName
-      );
-      const fileUri = fileUploadResult.file?.uri;
+
+      // 2. Uploader sur Gemini Files API (POST octet-stream)
+      const apiKey = process.env.GOOGLE_API_KEY;
+      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Goog-Upload-File-Name": fileName,
+          "X-Goog-Upload-Protocol": "raw",
+        },
+        body: videoBuffer,
+      });
+      if (!uploadRes.ok) {
+        throw new Error(
+          "Failed to upload file to Gemini Files API: " +
+            (await uploadRes.text())
+        );
+      }
+      const uploadJson = (await uploadRes.json()) as any;
+      const fileUri = uploadJson.file?.uri;
       if (!fileUri)
         throw new Error("No file URI returned from Gemini Files API");
-      // Prepare Gemini prompt and file reference
+
+      // 3. Analyse Gemini avec fileUri
       const prompt = this.getAnalysisPrompt();
       const result = await this.model.generateContent([
         prompt,
