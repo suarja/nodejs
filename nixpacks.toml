@@ -1,0 +1,15 @@
+# Railway deployment configuration with FFmpeg support
+# Based on: https://railway.app/help/fix-ffmpeg-issues
+
+[phases.setup]
+nixPkgs = ['ffmpeg', 'nodejs_18', 'npm']
+
+[phases.build]
+cmds = ['npm ci', 'npm run build']
+
+[start]
+cmd = 'npm start'
+
+[env]
+NODE_ENV = 'production'
+RAILWAY_ENVIRONMENT = 'production'

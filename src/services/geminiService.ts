@@ -8,8 +8,74 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, S3_BUCKET_NAME } from "../config/aws";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { spawn, execSync } from "child_process";
+import { promisify } from "util";
 
 const model = "gemini-2.5-flash";
+
+// Add video conversion utility
+interface VideoConversionResult {
+  success: boolean;
+  outputPath?: string;
+  originalFormat?: string;
+  error?: string;
+}
+
+// Railway/production environment detection
+const isRailway =
+  process.env.RAILWAY_ENVIRONMENT === "production" ||
+  process.env.NODE_ENV === "production";
+const isDevelopment =
+  process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
+
+// FFmpeg path detection
+let FFMPEG_PATH: string | null = null;
+
+/**
+ * Initialize FFmpeg path based on environment
+ */
+async function initializeFFmpegPath(): Promise<string | null> {
+  if (FFMPEG_PATH) return FFMPEG_PATH;
+
+  try {
+    if (isRailway || process.platform === 'linux') {
+      // Railway/Linux: Use system FFmpeg installed via nixpacks
+      console.log('🐧 Detecting system FFmpeg (Railway/Linux)...');
+      const ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8' }).trim();
+      FFMPEG_PATH = ffmpegPath;
+      console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
+    } else {
+      // Local development: Try system first, then fallback to npm package
+      try {
+        console.log('💻 Detecting system FFmpeg (local)...');
+        const ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8' }).trim();
+        FFMPEG_PATH = ffmpegPath;
+        console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
+      } catch {
+        console.log('📦 Falling back to npm FFmpeg package...');
+        try {
+          // Fallback to npm package for local development - using dynamic import
+          const ffmpegModule = await import('@ffmpeg-installer/ffmpeg').catch(() => null);
+          if (ffmpegModule && ffmpegModule.path) {
+            FFMPEG_PATH = ffmpegModule.path;
+            console.log(`✅ Found npm FFmpeg: ${FFMPEG_PATH}`);
+          } else {
+            console.log('⚠️ No FFmpeg found via npm package');
+            FFMPEG_PATH = null;
+          }
+        } catch (npmError) {
+          console.log('⚠️ No FFmpeg found via npm package');
+          FFMPEG_PATH = null;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ FFmpeg path detection failed:', error);
+    FFMPEG_PATH = null;
+  }
+
+  return FFMPEG_PATH;
+}
 
 // Types
 export interface VideoAnalysisData {
@@ -70,6 +136,312 @@ export class GeminiService {
     this.genAI = new GoogleGenAI({
       apiKey: apiKey,
     });
+
+    // Initialize FFmpeg path on service creation
+    this.initializeService();
+  }
+
+  private async initializeService() {
+    console.log(
+      `🚀 Initializing Gemini Service (Environment: ${
+        process.env.NODE_ENV || "development"
+      })`
+    );
+    await initializeFFmpegPath();
+  }
+
+  /**
+   * Check if FFmpeg is available on the system
+   */
+  private async checkFFmpegAvailability(): Promise<boolean> {
+    const ffmpegPath = await initializeFFmpegPath();
+
+    if (!ffmpegPath) {
+      return false;
+    }
+
+    return new Promise((resolve) => {
+      const ffmpeg = spawn(ffmpegPath, ["-version"]);
+
+      ffmpeg.on("close", (code) => {
+        resolve(code === 0);
+      });
+
+      ffmpeg.on("error", () => {
+        resolve(false);
+      });
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        ffmpeg.kill();
+        resolve(false);
+      }, 5000);
+    });
+  }
+
+  /**
+   * Convert video to MP4 format using FFmpeg
+   */
+  private async convertToMp4(
+    inputPath: string,
+    outputPath: string
+  ): Promise<VideoConversionResult> {
+    // Check if FFmpeg is available
+    const ffmpegAvailable = await this.checkFFmpegAvailability();
+    const ffmpegPath = await initializeFFmpegPath();
+
+    if (!ffmpegAvailable || !ffmpegPath) {
+      let installInstructions =
+        "FFmpeg not found. Please install FFmpeg to enable video conversion.\n";
+
+      if (isRailway) {
+        installInstructions +=
+          "Railway Installation:\n" +
+          "1. Create nixpacks.toml in your project root:\n" +
+          "   [phases.setup]\n" +
+          "   nixPkgs = ['ffmpeg']\n" +
+          "2. Redeploy your Railway service\n" +
+          "3. FFmpeg will be available at /nix/store/.../bin/ffmpeg";
+      } else {
+        installInstructions +=
+          "Local Installation:\n" +
+          "- Ubuntu/Debian: sudo apt update && sudo apt install ffmpeg\n" +
+          "- CentOS/RHEL: sudo yum install ffmpeg\n" +
+          "- macOS: brew install ffmpeg\n" +
+          "- Windows: Download from https://ffmpeg.org/download.html";
+      }
+
+      return {
+        success: false,
+        error: installInstructions,
+      };
+    }
+
+    return new Promise((resolve) => {
+      console.log(`🎬 Converting video to MP4: ${inputPath} → ${outputPath}`);
+      console.log(`🔧 Using FFmpeg: ${ffmpegPath}`);
+
+      const ffmpeg = spawn(ffmpegPath, [
+        "-i",
+        inputPath,
+        "-c:v",
+        "libx264", // Video codec
+        "-c:a",
+        "aac", // Audio codec
+        "-movflags",
+        "+faststart", // Web optimization
+        "-preset",
+        "fast", // Encoding speed vs compression
+        "-crf",
+        "23", // Quality (lower = better)
+        "-y", // Overwrite output file
+        outputPath,
+      ]);
+
+      let stderr = "";
+
+      ffmpeg.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpeg.on("close", (code) => {
+        if (code === 0) {
+          console.log(`✅ Video conversion successful: ${outputPath}`);
+          resolve({
+            success: true,
+            outputPath: outputPath,
+          });
+        } else {
+          console.error(`❌ FFmpeg conversion failed with code ${code}`);
+          console.error(`FFmpeg stderr: ${stderr}`);
+          resolve({
+            success: false,
+            error: `Video conversion failed: ${stderr.slice(-200)}`, // Last 200 chars of error
+          });
+        }
+      });
+
+      ffmpeg.on("error", (error) => {
+        console.error(`❌ FFmpeg spawn error:`, error);
+        resolve({
+          success: false,
+          error: `FFmpeg not found or failed to start: ${error.message}`,
+        });
+      });
+    });
+  }
+
+  /**
+   * Detect video format and get proper MIME type
+   */
+  private detectVideoFormat(videoBuffer: Buffer): {
+    mimeType: string;
+    extension: string;
+    needsConversion: boolean;
+    detectedFormat: string;
+  } {
+    const signature = videoBuffer.subarray(0, 12).toString("hex");
+
+    // Enhanced format detection
+    const formats = {
+      // MP4 variants
+      "66747970": {
+        mimeType: "video/mp4",
+        extension: "mp4",
+        needsConversion: false,
+        name: "MP4",
+      },
+      "667479706d703432": {
+        mimeType: "video/mp4",
+        extension: "mp4",
+        needsConversion: false,
+        name: "MP4",
+      },
+      "667479706d703431": {
+        mimeType: "video/mp4",
+        extension: "mp4",
+        needsConversion: false,
+        name: "MP4",
+      },
+      "66747970697473": {
+        mimeType: "video/mp4",
+        extension: "mp4",
+        needsConversion: false,
+        name: "MP4",
+      },
+
+      // WebM
+      "1a45dfa3": {
+        mimeType: "video/webm",
+        extension: "webm",
+        needsConversion: true,
+        name: "WebM",
+      },
+
+      // AVI
+      "52494646": {
+        mimeType: "video/avi",
+        extension: "avi",
+        needsConversion: true,
+        name: "AVI",
+      },
+
+      // QuickTime/MOV
+      "00000014": {
+        mimeType: "video/mov",
+        extension: "mov",
+        needsConversion: true,
+        name: "QuickTime",
+      },
+      "00000018": {
+        mimeType: "video/mov",
+        extension: "mov",
+        needsConversion: true,
+        name: "QuickTime",
+      },
+      "0000001c": {
+        mimeType: "video/mov",
+        extension: "mov",
+        needsConversion: true,
+        name: "QuickTime",
+      },
+
+      // WMV
+      "3026b275": {
+        mimeType: "video/wmv",
+        extension: "wmv",
+        needsConversion: true,
+        name: "WMV",
+      },
+
+      // FLV
+      "464c5601": {
+        mimeType: "video/x-flv",
+        extension: "flv",
+        needsConversion: true,
+        name: "FLV",
+      },
+
+      // 3GPP
+      "66747970336770": {
+        mimeType: "video/3gpp",
+        extension: "3gp",
+        needsConversion: true,
+        name: "3GPP",
+      },
+    };
+
+    // Check for known signatures
+    for (const [sig, format] of Object.entries(formats)) {
+      if (signature.startsWith(sig) || signature.includes(sig)) {
+        return {
+          mimeType: format.mimeType,
+          extension: format.extension,
+          needsConversion: format.needsConversion,
+          detectedFormat: format.name,
+        };
+      }
+    }
+
+    // Default to MP4 conversion for unknown formats
+    console.warn(
+      `⚠️ Unknown video format signature: ${signature}. Defaulting to MP4 conversion.`
+    );
+    return {
+      mimeType: "video/mp4",
+      extension: "mp4",
+      needsConversion: true,
+      detectedFormat: "Unknown",
+    };
+  }
+
+  /**
+   * Try to analyze video directly from URL (works for YouTube, TikTok)
+   * Falls back to Files API for other URLs like S3
+   */
+  private async tryDirectUrlAnalysis(
+    videoUrl: string
+  ): Promise<VideoAnalysisData | null> {
+    try {
+      // Check if this is a supported direct URL
+      const isYouTube =
+        videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be");
+      const isTikTok = videoUrl.includes("tiktok.com");
+
+      if (!isYouTube && !isTikTok) {
+        console.log(`🔗 URL not supported for direct analysis: ${videoUrl}`);
+        console.log(
+          `💡 Direct URL analysis only works for YouTube and TikTok URLs`
+        );
+        console.log(`🔄 Falling back to Files API for S3/other URLs`);
+        return null;
+      }
+
+      console.log(`🎬 Attempting direct URL analysis for: ${videoUrl}`);
+
+      const prompt = this.getAnalysisPromptWithVideoUrl(videoUrl);
+      const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+
+      const result = await ai.models.generateContent({
+        model: model,
+        contents: [prompt],
+      });
+
+      const responseText = result.text || "";
+
+      // Check if Gemini returned the "cannot access" error
+      if (responseText.includes("Cannot access or analyze video content")) {
+        console.log(
+          `⚠️ Direct URL analysis failed - video not accessible to Gemini`
+        );
+        return null;
+      }
+
+      return this.parseAnalysisResult(responseText);
+    } catch (error) {
+      console.log(`⚠️ Direct URL analysis failed:`, error);
+      return null;
+    }
   }
 
   /**
@@ -83,7 +455,16 @@ export class GeminiService {
 
       let analysisResult: VideoAnalysisData;
 
-      analysisResult = await this.analyzeWithVideoUrlInPrompt(publicUrl!);
+      // First, try direct URL analysis (works for YouTube/TikTok)
+      const directResult = await this.tryDirectUrlAnalysis(publicUrl);
+
+      if (directResult) {
+        console.log(`✅ Direct URL analysis successful`);
+        analysisResult = directResult;
+      } else {
+        console.log(`🔄 Using Files API for video analysis`);
+        analysisResult = await this.analyzeWithFilesAPI(publicUrl);
+      }
 
       const analysisTime = Date.now() - startTime;
 
@@ -304,80 +685,102 @@ export class GeminiService {
    * Analyze video using Gemini Files API (for videos > 20MB)
    */
   private async analyzeWithFilesAPI(
-    s3Key: string,
-    publicUrl?: string
+    publicUrl: string
   ): Promise<VideoAnalysisData> {
     let tempFilePath: string | null = null;
+    let convertedFilePath: string | null = null;
 
     try {
-      // 1. Télécharger la vidéo depuis l'URL publique ou S3
-      const videoBuffer = publicUrl
-        ? await this.downloadFromUrl(publicUrl)
-        : await this.downloadFromS3(s3Key);
-      const fileName = s3Key.split("/").pop() || "video.mp4";
+      // 1. Download video from public URL or S3
+      const videoBuffer = await this.downloadFromUrl(publicUrl);
       const fileSize = videoBuffer.length;
-      console.log("fileSize", fileSize);
+      console.log(`📥 Downloaded video: ${fileSize} bytes`);
 
-      // Vérifier le format du fichier
-      const fileSignature = videoBuffer.subarray(0, 4).toString("hex");
-      const validSignatures = {
-        "66747970": "MP4", // ftyp
-        "1a45dfa3": "WebM", // EBML
-        "52494646": "AVI", // RIFF
-        "00000014": "QuickTime", // QuickTime
-      };
+      // 2. Detect video format and determine if conversion is needed
+      const formatInfo = this.detectVideoFormat(videoBuffer);
+      console.log(
+        `🎬 Detected format: ${formatInfo.detectedFormat} (${formatInfo.mimeType})`
+      );
+      console.log(`🔄 Needs conversion: ${formatInfo.needsConversion}`);
 
-      if (
-        !Object.keys(validSignatures).some((sig) => fileSignature.includes(sig))
-      ) {
-        throw new Error(
-          `Format de fichier non supporté. Utilisez MP4, WebM, AVI ou QuickTime. File signature: ${fileSignature}`
-        );
-      }
-
-      // 2. Créer le dossier temporaire s'il n'existe pas
+      // 3. Create temp directory
       const tempDir = path.join(process.cwd(), "temp");
       await fs.mkdir(tempDir, { recursive: true });
 
-      // 3. Écrire temporairement le buffer dans un fichier
-      tempFilePath = path.join(tempDir, `temp_${Date.now()}_${fileName}`);
+      // 4. Save original file
+      tempFilePath = path.join(
+        tempDir,
+        `temp_${Date.now()}_original.${formatInfo.extension}`
+      );
       await fs.writeFile(tempFilePath, videoBuffer);
+      console.log(`📁 Original video saved: ${tempFilePath}`);
 
-      console.log(`📁 Video saved to temporary file: ${tempFilePath}`);
+      let finalFilePath = tempFilePath;
+      let finalMimeType = formatInfo.mimeType;
 
-      // 4. Upload vers Gemini en utilisant le chemin du fichier
+      // 5. Convert to MP4 if needed
+      if (formatInfo.needsConversion) {
+        convertedFilePath = path.join(
+          tempDir,
+          `temp_${Date.now()}_converted.mp4`
+        );
+
+        const conversionResult = await this.convertToMp4(
+          tempFilePath,
+          convertedFilePath
+        );
+
+        if (conversionResult.success && conversionResult.outputPath) {
+          console.log(`✅ Video converted to MP4: ${convertedFilePath}`);
+          finalFilePath = convertedFilePath;
+          finalMimeType = "video/mp4";
+        } else {
+          console.warn(
+            `⚠️ Conversion failed, using original: ${conversionResult.error}`
+          );
+          // Continue with original file if conversion fails
+        }
+      }
+
+      // 6. Upload to Gemini Files API
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
       let myfile = await ai.files.upload({
-        file: tempFilePath,
-        config: { mimeType: "video/mp4" },
+        file: finalFilePath,
+        config: { mimeType: finalMimeType },
       });
 
-      // Attendre le traitement avec timeout
-      const maxRetries = 10;
+      console.log(`📤 Video uploaded to Gemini: ${myfile.name}`);
+
+      // 7. Wait for processing with enhanced timeout
+      const maxRetries = 15; // Increased for larger files
       let retries = 0;
-      const startTime = Date.now();
+      const processingStartTime = Date.now();
 
       while (myfile.state === FileState.PROCESSING && retries < maxRetries) {
+        const elapsed = Math.round((Date.now() - processingStartTime) / 1000);
         console.log(
-          `🔄 Waiting for file to be processed... (attempt ${
+          `🔄 Waiting for file processing... (${
             retries + 1
-          }/${maxRetries}), state: ${myfile.state}`
+          }/${maxRetries}), state: ${myfile.state}, elapsed: ${elapsed}s`
         );
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // Increased to 3s
+
         myfile = await ai.files.get({
           name: myfile.name || "",
         });
         retries++;
       }
 
-      // Vérifier si le timeout a été atteint
+      // 8. Check final state
       if (retries >= maxRetries) {
         throw new Error(
-          "Le traitement du fichier a pris trop de temps. Veuillez réessayer."
+          `Video processing timeout after ${Math.round(
+            (Date.now() - processingStartTime) / 1000
+          )}s. Try with a smaller video.`
         );
       }
 
-      // Amélioration de la gestion des erreurs de l'état du fichier
       if (myfile.state !== FileState.ACTIVE) {
         const errorDetails = myfile.error?.details
           ?.map((d) => d.message)
@@ -386,57 +789,46 @@ export class GeminiService {
 
         console.error(
           `❌ File processing failed: state=${myfile.state}, error=${
-            errorDetails || "No error details provided"
-          }, processing time=${Date.now() - startTime}ms`
+            errorDetails || "No error details"
+          }`
         );
 
-        let errorMessage = "Échec de l'analyse de la vidéo";
+        let errorMessage = "Video processing failed";
 
-        // Messages d'erreur plus spécifiques selon l'état
         if (myfile.state === FileState.FAILED) {
-          if (errorDetails) {
-            if (errorDetails.includes("quota")) {
-              errorMessage =
-                "Quota d'analyse dépassé. Veuillez réessayer plus tard.";
-            } else if (errorDetails.includes("format")) {
-              errorMessage =
-                "Format de fichier non supporté. Utilisez MP4, WebM ou AVI.";
-            } else {
-              errorMessage = `L'analyse de la vidéo a échoué : ${errorDetails}`;
-            }
+          if (errorDetails?.includes("quota")) {
+            errorMessage = "Analysis quota exceeded. Please try again later.";
+          } else if (
+            errorDetails?.includes("format") ||
+            errorDetails?.includes("codec")
+          ) {
+            errorMessage =
+              "Video format not supported. Please try converting to MP4 manually.";
+          } else if (videoBuffer.length > 100 * 1024 * 1024) {
+            errorMessage =
+              "Video too large for analysis. Maximum 100MB supported.";
           } else {
-            // Vérifier des conditions spécifiques qui pourraient causer l'échec
-            if (videoBuffer.length > 100 * 1024 * 1024) {
-              errorMessage =
-                "La vidéo est trop volumineuse pour être analysée. Maximum 100MB.";
-            } else {
-              errorMessage =
-                "L'analyse de la vidéo a échoué. Le format n'est peut-être pas supporté ou le fichier est corrompu.";
-            }
+            errorMessage = `Video processing failed: ${
+              errorDetails || "Unknown error"
+            }`;
           }
-        } else if (myfile.state === FileState.PROCESSING) {
-          errorMessage =
-            "Le traitement du fichier a pris trop de temps. Veuillez réessayer.";
-        } else {
-          errorMessage =
-            "Le fichier n'est pas dans un état actif. Veuillez réessayer.";
         }
 
         throw new Error(errorMessage);
       }
 
-      console.log(`📤 Video uploaded to Gemini, URI: ${myfile.uri}`);
+      console.log(`📤 Video ready for analysis: ${myfile.uri}`);
 
       if (!myfile.uri) {
         throw new Error(
-          "Le fichier a été traité mais aucune URI n'a été retournée. Veuillez réessayer."
+          "File processed but no URI returned. Please try again."
         );
       }
 
-      // 5. Analyse avec Gemini
+      // 9. Analyze with Gemini
       const prompt = this.getAnalysisPrompt();
       const contents = createUserContent([
-        createPartFromUri(myfile.uri, "video/mp4"),
+        createPartFromUri(myfile.uri, finalMimeType),
         prompt,
       ]);
 
@@ -447,16 +839,18 @@ export class GeminiService {
 
       return this.parseAnalysisResult(result.text || "");
     } catch (error) {
-      console.error("Error in Files API analysis:", error);
+      console.error("❌ Files API analysis error:", error);
       throw error;
     } finally {
-      // Nettoyage : supprimer le fichier temporaire
-      if (tempFilePath) {
+      // Cleanup temp files
+      const filesToCleanup = [tempFilePath, convertedFilePath].filter(Boolean);
+
+      for (const filePath of filesToCleanup) {
         try {
-          await fs.unlink(tempFilePath);
-          console.log(`🗑️ Temporary file deleted: ${tempFilePath}`);
+          await fs.unlink(filePath!);
+          console.log(`🗑️ Cleaned up: ${path.basename(filePath!)}`);
         } catch (cleanupError) {
-          console.error("Error cleaning up temporary file:", cleanupError);
+          console.error(`⚠️ Cleanup error for ${filePath}:`, cleanupError);
         }
       }
     }
