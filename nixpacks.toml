@@ -1,0 +1,19 @@
+# Railway deployment configuration with FFmpeg
+# Avoid node_modules/.cache to prevent EBUSY
+
+[phases.setup]
+nixPkgs = ['ffmpeg', 'nodejs_22']
+
+# Override Node.js provider to disable problematic caching
+[phases.install]
+cmds = ['npm ci']
+
+[phases.build]
+cmds = ['rm -rf node_modules/.cache || true', 'npm run build']
+
+[start]
+cmd = 'npm start'
+
+[env]
+NODE_ENV = 'production'
+RAILWAY_ENVIRONMENT = 'production'
