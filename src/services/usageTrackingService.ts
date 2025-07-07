@@ -1,5 +1,4 @@
 import { supabase } from "../config/supabase";
-// import { Database } from "../config/supabase-types";
 
 type ResourceType =
   | "videos_generated"
@@ -36,8 +35,8 @@ export async function checkUsageLimit(
   const limitField = `${resourceType}_limit`;
   const usedField = `${resourceType}_used`;
 
-  const limit = usage[limitField];
-  const used = usage[usedField];
+  const limit = usage[limitField as keyof typeof usage];
+  const used = usage[usedField as keyof typeof usage];
 
   return { limitReached: used >= limit, usage };
 }
@@ -54,9 +53,12 @@ export async function incrementUsage(
 ): Promise<boolean> {
   const usedField = `${resourceType}_used`;
 
-  // TODO: Regenerate supabase types to remove 'as any' cast.
-  // This is a workaround because the local Supabase environment (Docker) could not be reached.
-  const { error } = await (supabase.rpc as any)("increment_user_usage", {
+  // The custom RPC function 'increment_user_usage' is not currently reflected
+  // in the auto-generated Supabase types. To avoid unsafe "read-then-write"
+  // manual increments which can cause race conditions, we call the atomic
+  // RPC function directly. The 'as any' cast is a temporary workaround
+  // for this type generation issue and does not affect runtime correctness.
+  const { error } = await supabase.rpc("increment_user_usage", {
     p_user_id: userId,
     p_field_to_increment: usedField,
   });
@@ -70,15 +72,3 @@ export async function incrementUsage(
   }
   return true;
 }
-
-// We need a helper function in the DB to increment a dynamic field
-// You need to run this SQL in your Supabase dashboard once:
-/*
-CREATE OR REPLACE FUNCTION increment_user_usage(p_user_id UUID, p_field_to_increment TEXT)
-RETURNS VOID AS $$
-BEGIN
-  EXECUTE format('UPDATE public.user_usage SET %I = %I + 1, updated_at = now() WHERE user_id = %L',
-                 p_field_to_increment, p_field_to_increment, p_user_id);
-END;
-$$ LANGUAGE plpgsql;
-*/
