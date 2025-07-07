@@ -5,6 +5,7 @@ import {
   videoAnalysisHandler,
   videoAnalysisHealthHandler,
 } from "./videoAnalysis";
+import { videoDeleteHandler, videoDeleteHealthHandler } from "./videoDelete";
 import { generateVideoHandler, getVideoStatusHandler } from "./videos";
 import {
   saveSourceVideoHandler,
@@ -92,6 +93,10 @@ apiRouter.post("/s3-upload", uploadS3Handler);
 // Video analysis endpoints (auth handled in the handlers)
 apiRouter.post("/video-analysis", videoAnalysisHandler);
 apiRouter.get("/video-analysis/health", videoAnalysisHealthHandler);
+
+// Video deletion endpoints (auth handled in the handlers)
+apiRouter.delete("/videos", videoDeleteHandler);
+apiRouter.get("/video-delete/health", videoDeleteHealthHandler);
 
 // Source videos endpoints (auth handled in the handlers)
 apiRouter.post("/source-videos", saveSourceVideoHandler);
