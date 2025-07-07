@@ -13,11 +13,11 @@ Based on [Railway FFmpeg Forum Discussion](https://railway.app/help/fix-ffmpeg-i
 ```toml
 # Railway deployment configuration with FFmpeg support
 [phases.setup]
-nixPkgs = ['ffmpeg', 'nodejs_20']
+nixPkgs = ['ffmpeg', 'nodejs_22']
 
 [phases.build]
 cmds = [
-    'npm ci',
+    'npm ci --no-cache --prefer-offline',
     'npm run build'
 ]
 
@@ -27,13 +27,18 @@ cmd = 'npm start'
 [env]
 NODE_ENV = 'production'
 RAILWAY_ENVIRONMENT = 'production'
+
+# Disable problematic cache mounts
+[variables]
+NIXPACKS_NO_CACHE = '1'
 ```
 
 **⚠️ Important Notes:**
 
 - Do NOT include `npm` in nixPkgs - it comes automatically with Node.js
-- Use `nodejs_20` - our `@google/genai` package requires Node.js >= 20.0.0
-- Only exclude `npm` from nixPkgs, not Node.js itself
+- Use `nodejs_22` (LTS) - latest stable and compatible with all packages
+- Include `--no-cache` flags to avoid Railway cache conflicts
+- Set `NIXPACKS_NO_CACHE = '1'` to disable problematic cache mounts
 
 ### 2. Environment Variables
 
@@ -98,14 +103,14 @@ at /app/.nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix:19:26:
 ```
 
 **Solution:**
-Remove only `npm` from nixPkgs in nixpacks.toml (keep nodejs_20):
+Remove only `npm` from nixPkgs in nixpacks.toml (keep nodejs_22):
 
 ```toml
 # ❌ Wrong
-nixPkgs = ['ffmpeg', 'nodejs_20', 'npm']
+nixPkgs = ['ffmpeg', 'nodejs_22', 'npm']
 
 # ✅ Correct
-nixPkgs = ['ffmpeg', 'nodejs_20']
+nixPkgs = ['ffmpeg', 'nodejs_22']
 ```
 
 ### Build Error: "npm: command not found"
@@ -117,14 +122,14 @@ nixPkgs = ['ffmpeg', 'nodejs_20']
 ```
 
 **Solution:**
-Add `nodejs_20` back to nixPkgs - Railway doesn't auto-detect Node.js:
+Add `nodejs_22` back to nixPkgs - Railway doesn't auto-detect Node.js:
 
 ```toml
 # ❌ Wrong (missing Node.js)
 nixPkgs = ['ffmpeg']
 
 # ✅ Correct
-nixPkgs = ['ffmpeg', 'nodejs_20']
+nixPkgs = ['ffmpeg', 'nodejs_22']
 ```
 
 ### Build Error: "Unsupported engine" - Node.js version
@@ -140,14 +145,14 @@ npm warn EBADENGINE }
 ```
 
 **Solution:**
-Update to Node.js 20 in nixpacks.toml:
+Update to Node.js 22 in nixpacks.toml:
 
 ```toml
 # ❌ Wrong (Node.js 18 too old)
 nixPkgs = ['ffmpeg', 'nodejs_18']
 
-# ✅ Correct (Node.js 20 required)
-nixPkgs = ['ffmpeg', 'nodejs_20']
+# ✅ Correct (Node.js 22 required)
+nixPkgs = ['ffmpeg', 'nodejs_22']
 ```
 
 ### Build Error: "EBUSY: resource busy or locked"
@@ -163,13 +168,27 @@ npm error EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'
 ```
 
 **Solution:**
-This is usually a Railway cache issue. Try:
+This is a Railway cache mount conflict. Fix with these nixpacks.toml changes:
 
-1. **Clear Railway cache** in Railway dashboard
-2. **Redeploy** the service
-3. **Wait a few minutes** and try again
+```toml
+[phases.build]
+cmds = [
+    'npm ci --no-cache --prefer-offline',  # Disable npm cache
+    'npm run build'
+]
 
-If the issue persists, the Node.js version update should resolve it.
+# Disable problematic cache mounts
+[variables]
+NIXPACKS_NO_CACHE = '1'
+```
+
+**Alternative solutions:**
+
+1. **Clear Railway cache** in Railway dashboard → Settings → Clear Cache
+2. **Redeploy** the service completely
+3. **Wait 5-10 minutes** between deploys to let caches clear
+
+The cache flags should prevent this issue permanently.
 
 ### FFmpeg Not Found in Production
 

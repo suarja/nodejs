@@ -2,10 +2,10 @@
 # Based on: https://railway.app/help/fix-ffmpeg-issues
 
 [phases.setup]
-nixPkgs = ['ffmpeg', 'nodejs_20']
+nixPkgs = ['ffmpeg', 'nodejs_22']
 
 [phases.build]
-cmds = ['npm ci', 'npm run build']
+cmds = ['npm ci --no-cache --prefer-offline', 'npm run build']
 
 [start]
 cmd = 'npm start'
@@ -13,3 +13,7 @@ cmd = 'npm start'
 [env]
 NODE_ENV = 'production'
 RAILWAY_ENVIRONMENT = 'production'
+
+# Disable problematic cache mounts
+[variables]
+NIXPACKS_NO_CACHE = '1'
