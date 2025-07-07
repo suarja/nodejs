@@ -40,7 +40,7 @@ export function usageLimiter(resourceType: ResourceType) {
     // Attach user to request for subsequent handlers
     (req as any).user = user;
 
-    next();
+    return next();
   };
 }
 
