@@ -5,7 +5,7 @@ import {
   incrementUsage,
 } from "../services/usageTrackingService";
 
-type ResourceType = "source_videos" | "voice_clones"; // Add other resources as needed
+type ResourceType = "source_videos" | "voice_clones" | "videos_generated"; // Add other resources as needed
 
 export function usageLimiter(resourceType: ResourceType) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -51,4 +51,4 @@ export async function incrementResourceUsage(
   resourceType: ResourceType
 ) {
   await incrementUsage(userId, resourceType);
-} 
+}

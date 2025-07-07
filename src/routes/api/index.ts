@@ -26,6 +26,7 @@ import webhooksRouter from "./webhooks";
 import voiceCloneRouter from "./voiceClone";
 import onboardingRouter from "./onboarding";
 import supportRouter from "./support";
+import { usageLimiter } from "../../middleware/usageLimitMiddleware";
 
 const apiRouter = express.Router();
 
@@ -104,7 +105,11 @@ apiRouter.get("/source-videos", getSourceVideosHandler);
 apiRouter.put("/source-videos/:videoId", updateSourceVideoHandler);
 
 // Video generation endpoints (auth handled in the handlers)
-apiRouter.post("/videos/generate", generateVideoHandler);
+apiRouter.post(
+  "/videos/generate",
+  usageLimiter("videos_generated"),
+  generateVideoHandler
+);
 apiRouter.get("/videos/status/:id", getVideoStatusHandler);
 
 // Script chat endpoints (NEW)

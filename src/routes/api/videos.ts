@@ -12,6 +12,10 @@ import {
   HttpStatus,
 } from "../../utils/api/responses";
 import { CreatomateRenderResponseSchema } from "../../types/renders";
+import {
+  usageLimiter,
+  incrementResourceUsage,
+} from "../../middleware/usageLimitMiddleware";
 
 /**
  * Video generation API controller matching the original mobile app
@@ -23,24 +27,10 @@ export async function generateVideoHandler(req: Request, res: Response) {
   console.log("🎬 Starting video generation request...");
 
   try {
-    // Step 1: Authenticate user using ClerkAuthService
-    const authHeader = req.headers.authorization;
-    const {
-      user,
-      clerkUser,
-      errorResponse: authError,
-    } = await ClerkAuthService.verifyUser(authHeader);
-
-    if (authError) {
-      return errorResponseExpress(res, authError.error, authError.status);
-    }
-
-    console.log(
-      "🔐 User authenticated - DB ID:",
-      user?.id,
-      "Clerk ID:",
-      clerkUser?.id
-    );
+    // Middleware has already authenticated user and checked usage limit.
+    // The user object is attached to the request.
+    const user = (req as any).user;
+    console.log("🔐 User authenticated - DB ID:", user?.id);
 
     // Step 2: Parse and validate request
     let requestBody;
@@ -70,6 +60,9 @@ export async function generateVideoHandler(req: Request, res: Response) {
     // Step 4: Generate video using the proper generator service
     const videoGenerator = new VideoGeneratorService(user);
     const result = await videoGenerator.generateVideo(validationResult.payload);
+
+    // Increment usage *after* the request is successfully created
+    await incrementResourceUsage(user.id, "videos_generated");
 
     console.log("✅ Video generation process initiated successfully");
 
@@ -150,7 +143,11 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
     if (!id) {
-      return errorResponseExpress(res, "Video ID is required", HttpStatus.BAD_REQUEST);
+      return errorResponseExpress(
+        res,
+        "Video ID is required",
+        HttpStatus.BAD_REQUEST
+      );
     }
     console.log("id- +api", id);
     // Step 1: Authenticate user using ClerkAuthService

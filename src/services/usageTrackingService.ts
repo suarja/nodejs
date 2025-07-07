@@ -14,7 +14,7 @@ type ResourceType =
  */
 export async function checkUsageLimit(
   userId: string,
-  resourceType: "source_videos"
+  resourceType: "source_videos" | "voice_clones" | "videos_generated"
 ): Promise<{ limitReached: boolean; usage?: any }> {
   const { data: usage, error } = await supabase
     .from("user_usage")
@@ -49,7 +49,7 @@ export async function checkUsageLimit(
  */
 export async function incrementUsage(
   userId: string,
-  resourceType: "source_videos"
+  resourceType: "source_videos" | "voice_clones" | "videos_generated"
 ): Promise<boolean> {
   const usedField = `${resourceType}_used`;
 
