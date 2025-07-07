@@ -38,39 +38,43 @@ async function initializeFFmpegPath(): Promise<string | null> {
   if (FFMPEG_PATH) return FFMPEG_PATH;
 
   try {
-    if (isRailway || process.platform === 'linux') {
+    if (isRailway || process.platform === "linux") {
       // Railway/Linux: Use system FFmpeg installed via nixpacks
-      console.log('🐧 Detecting system FFmpeg (Railway/Linux)...');
-      const ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8' }).trim();
+      console.log("🐧 Detecting system FFmpeg (Railway/Linux)...");
+      const ffmpegPath = execSync("which ffmpeg", { encoding: "utf8" }).trim();
       FFMPEG_PATH = ffmpegPath;
       console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
     } else {
       // Local development: Try system first, then fallback to npm package
       try {
-        console.log('💻 Detecting system FFmpeg (local)...');
-        const ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8' }).trim();
+        console.log("💻 Detecting system FFmpeg (local)...");
+        const ffmpegPath = execSync("which ffmpeg", {
+          encoding: "utf8",
+        }).trim();
         FFMPEG_PATH = ffmpegPath;
         console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
       } catch {
-        console.log('📦 Falling back to npm FFmpeg package...');
+        console.log("📦 Falling back to npm FFmpeg package...");
         try {
           // Fallback to npm package for local development - using dynamic import
-          const ffmpegModule = await import('@ffmpeg-installer/ffmpeg').catch(() => null);
+          const ffmpegModule = await import("@ffmpeg-installer/ffmpeg").catch(
+            () => null
+          );
           if (ffmpegModule && ffmpegModule.path) {
             FFMPEG_PATH = ffmpegModule.path;
             console.log(`✅ Found npm FFmpeg: ${FFMPEG_PATH}`);
           } else {
-            console.log('⚠️ No FFmpeg found via npm package');
+            console.log("⚠️ No FFmpeg found via npm package");
             FFMPEG_PATH = null;
           }
         } catch (npmError) {
-          console.log('⚠️ No FFmpeg found via npm package');
+          console.log("⚠️ No FFmpeg found via npm package");
           FFMPEG_PATH = null;
         }
       }
     }
   } catch (error) {
-    console.error('❌ FFmpeg path detection failed:', error);
+    console.error("❌ FFmpeg path detection failed:", error);
     FFMPEG_PATH = null;
   }
 
@@ -986,7 +990,7 @@ export class GeminiService {
     return `
     CRITICAL INSTRUCTION: Only analyze this video if you can actually access and view it: ${videoUrl}
 
-    If you CANNOT access, view, or analyze the video content, return EXACTLY this JSON:
+    If you CANNOT access, view, or analyze the video content for ANY reason (including content policy restrictions, identifiable people, or technical limitations), return EXACTLY this JSON:
     {
       "error": "Cannot access or analyze video content"
     }

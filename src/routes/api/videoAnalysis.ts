@@ -60,7 +60,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
               requires_manual_edit: true,
               reason: "video_not_accessible",
               message:
-                "The video could not be analyzed automatically. Manual editing is required.",
+                "The video could not be analyzed automatically. Manual editing is required. This may be due to content limitations (e.g., identifiable people, content policy restrictions) or technical limitations of the AI service.",
             },
           });
         }
@@ -86,7 +86,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
             requires_manual_edit: true,
             reason: "analysis_not_possible",
             message:
-              "Automatic analysis is not available for this video. Please edit manually.",
+              "Automatic analysis is not available for this video. This may be due to content limitations (e.g., identifiable people, content policy restrictions) or technical limitations of the AI service. Please edit manually.",
           },
         });
       }
