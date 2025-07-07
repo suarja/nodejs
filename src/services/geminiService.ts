@@ -590,7 +590,14 @@ export class GeminiService {
 
   private getAnalysisPromptWithVideoUrl(videoUrl: string): string {
     return `
-    Analyze this video: ${videoUrl} and provide comprehensive metadata in the following JSON format:
+    CRITICAL INSTRUCTION: Only analyze this video if you can actually access and view it: ${videoUrl}
+
+    If you CANNOT access, view, or analyze the video content, return EXACTLY this JSON:
+    {
+      "error": "Cannot access or analyze video content"
+    }
+
+    If you CAN access and analyze the video, provide comprehensive metadata in this JSON format:
 
     {
       "title": "A concise, descriptive title for the video (3-8 words)",
@@ -623,7 +630,7 @@ export class GeminiService {
       }
     }
 
-    Guidelines:
+    Guidelines for REAL analysis (only if you can actually see the video):
     - Title: 3-8 words, descriptive but concise
     - Description: 1-3 sentences explaining main content
     - Tags: 3-8 relevant keywords for filtering
@@ -636,14 +643,11 @@ export class GeminiService {
     - Structure: Detect hooks, CTAs, transitions, pacing
     - Key moments: Important timestamps for future editing
 
-    Return ONLY valid JSON. Do not include any markdown formatting or additional text.
-
-    If you cannot analyze the video, return an JSON object containing the error message.
-
-    EXAMPLE:
-    {
-      "error": "No JSON found in response"
-    }
+    IMPORTANT RULES:
+    1. DO NOT hallucinate or make up content if you cannot see the video
+    2. DO NOT create fake analysis based on the URL or filename
+    3. If uncertain about any content, use the error response format
+    4. Return ONLY valid JSON, no markdown formatting or additional text
     `;
   }
 
