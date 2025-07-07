@@ -13,7 +13,7 @@ Based on [Railway FFmpeg Forum Discussion](https://railway.app/help/fix-ffmpeg-i
 ```toml
 # Railway deployment configuration with FFmpeg support
 [phases.setup]
-nixPkgs = ['ffmpeg', 'nodejs_18']
+nixPkgs = ['ffmpeg', 'nodejs_20']
 
 [phases.build]
 cmds = [
@@ -32,7 +32,7 @@ RAILWAY_ENVIRONMENT = 'production'
 **⚠️ Important Notes:**
 
 - Do NOT include `npm` in nixPkgs - it comes automatically with Node.js
-- DO include `nodejs_18` in nixPkgs - Railway doesn't auto-detect Node.js projects
+- Use `nodejs_20` - our `@google/genai` package requires Node.js >= 20.0.0
 - Only exclude `npm` from nixPkgs, not Node.js itself
 
 ### 2. Environment Variables
@@ -98,14 +98,14 @@ at /app/.nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix:19:26:
 ```
 
 **Solution:**
-Remove only `npm` from nixPkgs in nixpacks.toml (keep nodejs_18):
+Remove only `npm` from nixPkgs in nixpacks.toml (keep nodejs_20):
 
 ```toml
 # ❌ Wrong
-nixPkgs = ['ffmpeg', 'nodejs_18', 'npm']
+nixPkgs = ['ffmpeg', 'nodejs_20', 'npm']
 
 # ✅ Correct
-nixPkgs = ['ffmpeg', 'nodejs_18']
+nixPkgs = ['ffmpeg', 'nodejs_20']
 ```
 
 ### Build Error: "npm: command not found"
@@ -117,15 +117,59 @@ nixPkgs = ['ffmpeg', 'nodejs_18']
 ```
 
 **Solution:**
-Add `nodejs_18` back to nixPkgs - Railway doesn't auto-detect Node.js:
+Add `nodejs_20` back to nixPkgs - Railway doesn't auto-detect Node.js:
 
 ```toml
 # ❌ Wrong (missing Node.js)
 nixPkgs = ['ffmpeg']
 
 # ✅ Correct
-nixPkgs = ['ffmpeg', 'nodejs_18']
+nixPkgs = ['ffmpeg', 'nodejs_20']
 ```
+
+### Build Error: "Unsupported engine" - Node.js version
+
+**Error:**
+
+```
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@google/genai@1.8.0',
+npm warn EBADENGINE   required: { node: '>=20.0.0' },
+npm warn EBADENGINE   current: { node: 'v18.20.5', npm: '10.8.2' }
+npm warn EBADENGINE }
+```
+
+**Solution:**
+Update to Node.js 20 in nixpacks.toml:
+
+```toml
+# ❌ Wrong (Node.js 18 too old)
+nixPkgs = ['ffmpeg', 'nodejs_18']
+
+# ✅ Correct (Node.js 20 required)
+nixPkgs = ['ffmpeg', 'nodejs_20']
+```
+
+### Build Error: "EBUSY: resource busy or locked"
+
+**Error:**
+
+```
+npm error code EBUSY
+npm error syscall rmdir
+npm error path /app/node_modules/.cache
+npm error errno -16
+npm error EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'
+```
+
+**Solution:**
+This is usually a Railway cache issue. Try:
+
+1. **Clear Railway cache** in Railway dashboard
+2. **Redeploy** the service
+3. **Wait a few minutes** and try again
+
+If the issue persists, the Node.js version update should resolve it.
 
 ### FFmpeg Not Found in Production
 
