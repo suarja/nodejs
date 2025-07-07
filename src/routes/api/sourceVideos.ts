@@ -6,6 +6,10 @@ import {
   errorResponseExpress,
   HttpStatus,
 } from "../../utils/api/responses";
+import {
+  checkUsageLimit,
+  incrementUsage,
+} from "../../services/usageTrackingService";
 
 /**
  * Save source video metadata after successful S3 upload
@@ -14,7 +18,7 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
   try {
     console.log("💾 Save source video request received");
 
-    // Step 1: Authenticate user using ClerkAuthService
+    // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
     const {
       user,
@@ -25,15 +29,27 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
     if (authError) {
       return res.status(authError.status).json(authError);
     }
-
+    const userId = user!.id;
     console.log(
       "🔐 User authenticated for source video save - DB ID:",
-      user?.id,
+      userId,
       "Clerk ID:",
       clerkUser?.id
     );
 
-    // Step 2: Validate request body
+    // Step 2: Check usage limit before proceeding
+    const { limitReached } = await checkUsageLimit(userId, "source_videos");
+    if (limitReached) {
+      console.warn(`
+      source_videos limit reached for user ${userId}`);
+      return errorResponseExpress(
+        res,
+        "Source video limit reached. Please delete a video to upload a new one.",
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    // Step 3: Validate request body
     const {
       title,
       description,
@@ -51,11 +67,11 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
       );
     }
 
-    // Step 3: Insert video metadata into database
+    // Step 4: Insert video metadata into database
     const { data: videoData, error: insertError } = await supabase
       .from("videos")
       .insert({
-        user_id: user!.id, // Use database user ID
+        user_id: userId,
         title: title || "",
         description: description || "",
         tags: Array.isArray(tags) ? tags : [],
@@ -76,6 +92,9 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
     }
 
     console.log("✅ Source video saved successfully:", videoData.id);
+
+    // Step 5: Increment usage count
+    await incrementUsage(userId, "source_videos");
 
     return successResponseExpress(
       res,
