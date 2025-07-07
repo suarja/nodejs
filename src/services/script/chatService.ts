@@ -1,23 +1,24 @@
 import { Response } from "express";
-import { User } from '@supabase/supabase-js';
-import OpenAI from 'openai';
-import { supabase } from '../../config/supabase';
-import { createOpenAIClient } from '../../config/openai';
-import { PromptService } from '../promptService';
-import type { 
-  ScriptChatRequest, 
-  ScriptChatResponse, 
-  ChatMessage, 
-  ScriptDraft
-} from '../../types/script';
-import { 
+import { User } from "@supabase/supabase-js";
+import OpenAI from "openai";
+import { supabase } from "../../config/supabase";
+import { createOpenAIClient } from "../../config/openai";
+import { PromptService } from "../promptService";
+import type {
+  ScriptChatRequest,
+  ScriptChatResponse,
+  ChatMessage,
+  ScriptDraft,
+} from "../../types/script";
+import {
   estimateScriptDuration,
-  generateScriptTitle 
-} from '../../types/script';
+  generateScriptTitle,
+} from "../../types/script";
+import { Json } from "../../config/supabase-types";
 
 /**
  * ScriptChatService - Handles conversational script generation
- * 
+ *
  * This service manages the chat-based script creation workflow:
  * - Maintains conversation history
  * - Integrates editorial profile in each request
@@ -27,7 +28,7 @@ import {
 export class ScriptChatService {
   private user: User;
   private openai: OpenAI;
-  private model: string = 'gpt-4o'; // Latest OpenAI model
+  private model: string = "gpt-4o"; // Latest OpenAI model
 
   constructor(user: User) {
     this.user = user;
@@ -44,37 +45,45 @@ export class ScriptChatService {
       console.log(`👑 User Pro status: ${request.isPro || false}`);
 
       // Get or create script draft
-      console.log('🔄 Getting or creating script draft...');
+      console.log("🔄 Getting or creating script draft...");
       const scriptDraft = await this.getOrCreateScriptDraft(request);
       console.log(`✅ Script draft: ${scriptDraft.id}`);
-      
+
       // Get editorial profile
-      console.log('👤 Getting editorial profile...');
-      const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
+      console.log("👤 Getting editorial profile...");
+      const editorialProfile = await this.getEditorialProfile(
+        request.editorialProfileId
+      );
       console.log(`✅ Editorial profile loaded`);
-      
+
       // Get editorial profile and TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        console.log('📱 Getting TikTok analysis context...');
+        console.log("📱 Getting TikTok analysis context...");
         tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
-        console.log(tiktokContext ? '✅ TikTok analysis context loaded' : '📭 No TikTok analysis available');
+        console.log(
+          tiktokContext
+            ? "✅ TikTok analysis context loaded"
+            : "📭 No TikTok analysis available"
+        );
       } else {
-        console.log('ℹ️ No scriptId provided, skipping TikTok context fetch');
+        console.log("ℹ️ No scriptId provided, skipping TikTok context fetch");
       }
-      
+
       // Create conversation history
-      console.log('💭 Building conversation history...');
+      console.log("💭 Building conversation history...");
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
         request.message,
         editorialProfile,
         tiktokContext
       );
-      console.log(`✅ Conversation history built: ${conversationHistory.length} messages`);
+      console.log(
+        `✅ Conversation history built: ${conversationHistory.length} messages`
+      );
 
       // Generate response with structured output
-      console.log('🤖 Calling OpenAI with structured output...');
+      console.log("🤖 Calling OpenAI with structured output...");
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: conversationHistory,
@@ -82,35 +91,35 @@ export class ScriptChatService {
         max_tokens: 2000,
         response_format: { type: "json_object" },
       });
-      console.log('✅ OpenAI response received');
+      console.log("✅ OpenAI response received");
 
       const assistantMessage = completion.choices[0]?.message?.content;
       if (!assistantMessage) {
-        throw new Error('No response generated from OpenAI');
+        throw new Error("No response generated from OpenAI");
       }
       console.log(`📝 Assistant message length: ${assistantMessage.length}`);
 
       // Parse structured response
-      console.log('🔍 Parsing structured response...');
+      console.log("🔍 Parsing structured response...");
       const structuredResponse = this.parseStructuredResponse(assistantMessage);
       console.log(`✅ Structured response parsed:`, {
         hasScript: !!structuredResponse.script,
         hasScriptUpdate: structuredResponse.hasScriptUpdate,
-        conversationLength: structuredResponse.conversation.length
+        conversationLength: structuredResponse.conversation.length,
       });
-      
+
       // Create chat messages
-      console.log('💬 Creating chat messages...');
+      console.log("💬 Creating chat messages...");
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
-        role: 'user',
+        role: "user",
         content: request.message,
         timestamp: new Date().toISOString(),
       };
 
       const assistantChatMessage: ChatMessage = {
         id: `msg_${Date.now()}_assistant`,
-        role: 'assistant',
+        role: "assistant",
         content: structuredResponse.conversation, // Store only the conversation part
         timestamp: new Date().toISOString(),
         metadata: {
@@ -122,18 +131,19 @@ export class ScriptChatService {
       };
 
       // Determine script to save (use existing if no update)
-      const scriptToSave = structuredResponse.hasScriptUpdate && structuredResponse.script 
-        ? structuredResponse.script 
-        : scriptDraft.current_script;
+      const scriptToSave =
+        structuredResponse.hasScriptUpdate && structuredResponse.script
+          ? structuredResponse.script
+          : scriptDraft.current_script;
 
       // Update script draft
-      console.log('💾 Updating script draft...');
+      console.log("💾 Updating script draft...");
       const updatedDraft = await this.updateScriptDraft(
         scriptDraft.id,
         scriptToSave,
         [userMessage, assistantChatMessage]
       );
-      console.log('✅ Script draft updated successfully');
+      console.log("✅ Script draft updated successfully");
 
       // Track script version for improvement analytics
       if (structuredResponse.hasScriptUpdate && structuredResponse.script) {
@@ -146,7 +156,7 @@ export class ScriptChatService {
         );
       }
 
-      console.log('📤 Returning response...');
+      console.log("📤 Returning response...");
       return {
         scriptId: updatedDraft.id,
         message: assistantChatMessage,
@@ -159,9 +169,8 @@ export class ScriptChatService {
           nextSteps: structuredResponse.metadata?.nextSteps,
         },
       };
-
     } catch (error) {
-      console.error('❌ Script chat error:', error);
+      console.error("❌ Script chat error:", error);
       throw error;
     }
   }
@@ -169,44 +178,52 @@ export class ScriptChatService {
   /**
    * Handle streaming chat interaction
    */
-  async handleStreamingChat(request: ScriptChatRequest, res: Response): Promise<void> {
+  async handleStreamingChat(
+    request: ScriptChatRequest,
+    res: Response
+  ): Promise<void> {
     try {
       console.log(`🔄 Processing streaming chat for user ${this.user.id}`);
 
       // Step 1: Initializing
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      this.sendStreamMessage(res, { type: 'status', message: 'Démarrage de la génération du script...' });
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      this.sendStreamMessage(res, {
+        type: "status",
+        message: "Démarrage de la génération du script...",
+      });
 
       // Get or create script draft
       const scriptDraft = await this.getOrCreateScriptDraft(request);
-      
+
       // Step 2: Loading profile
       this.sendStreamMessage(res, {
-        type: 'status_update',
+        type: "status_update",
         scriptId: scriptDraft.id,
-        status: 'loading_profile',
-        message: 'Chargement du profil éditorial...',
+        status: "loading_profile",
+        message: "Chargement du profil éditorial...",
       });
-      
+
       // Get editorial profile
-      const editorialProfile = await this.getEditorialProfile(request.editorialProfileId);
-      
+      const editorialProfile = await this.getEditorialProfile(
+        request.editorialProfileId
+      );
+
       // Get TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
         tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
       }
-      
+
       // Step 3: Building context
       this.sendStreamMessage(res, {
-        type: 'status_update',
+        type: "status_update",
         scriptId: scriptDraft.id,
-        status: 'building_context',
-        message: 'Analyse du contexte de conversation...',
+        status: "building_context",
+        message: "Analyse du contexte de conversation...",
       });
-      
+
       // Create conversation history
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
@@ -217,14 +234,14 @@ export class ScriptChatService {
 
       // Step 4: Start generation
       this.sendStreamMessage(res, {
-        type: 'message_start',
+        type: "message_start",
         scriptId: scriptDraft.id,
-        status: 'generating',
-        message: 'Génération de la réponse...',
+        status: "generating",
+        message: "Génération de la réponse...",
       });
 
-      let fullResponse = '';
-      
+      let fullResponse = "";
+
       // Create streaming completion
       const stream = await this.openai.chat.completions.create({
         model: this.model,
@@ -240,7 +257,7 @@ export class ScriptChatService {
         if (content) {
           fullResponse += content;
           this.sendStreamMessage(res, {
-            type: 'content_delta',
+            type: "content_delta",
             scriptId: scriptDraft.id,
             content,
           });
@@ -249,34 +266,34 @@ export class ScriptChatService {
 
       // Step 5: Processing response
       this.sendStreamMessage(res, {
-        type: 'status_update',
+        type: "status_update",
         scriptId: scriptDraft.id,
-        status: 'processing',
-        message: 'Traitement de la réponse...',
+        status: "processing",
+        message: "Traitement de la réponse...",
       });
 
       // Extract script and finalize
       const extractedScript = this.extractScriptFromResponse(fullResponse);
-      
+
       // Step 6: Updating draft
       this.sendStreamMessage(res, {
-        type: 'status_update',
+        type: "status_update",
         scriptId: scriptDraft.id,
-        status: 'updating_draft',
-        message: 'Mise à jour du script...',
+        status: "updating_draft",
+        message: "Mise à jour du script...",
       });
-      
+
       // Create chat messages
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
-        role: 'user',
+        role: "user",
         content: request.message,
         timestamp: new Date().toISOString(),
       };
 
       const assistantMessage: ChatMessage = {
         id: `msg_${Date.now()}_assistant`,
-        role: 'assistant',
+        role: "assistant",
         content: fullResponse,
         timestamp: new Date().toISOString(),
         metadata: {
@@ -302,7 +319,7 @@ export class ScriptChatService {
 
       // Send completion message
       this.sendStreamMessage(res, {
-        type: 'message_complete',
+        type: "message_complete",
         scriptId: updatedDraft.id,
         message: assistantMessage,
         currentScript: extractedScript,
@@ -313,13 +330,12 @@ export class ScriptChatService {
       });
 
       res.end();
-
     } catch (error) {
-      console.error('❌ Streaming chat error:', error);
+      console.error("❌ Streaming chat error:", error);
       this.sendStreamMessage(res, {
-        type: 'error',
-        scriptId: request.scriptId || '',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        type: "error",
+        scriptId: request.scriptId || "",
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       res.end();
     }
@@ -328,30 +344,32 @@ export class ScriptChatService {
   /**
    * Get or create script draft
    */
-  private async getOrCreateScriptDraft(request: ScriptChatRequest): Promise<ScriptDraft> {
+  private async getOrCreateScriptDraft(
+    request: ScriptChatRequest
+  ): Promise<ScriptDraft> {
     if (request.scriptId) {
       // Fetch existing draft
       const { data: draft, error } = await supabase
-        .from('script_drafts')
-        .select('*')
-        .eq('id', request.scriptId)
-        .eq('user_id', this.user.id)
+        .from("script_drafts")
+        .select("*")
+        .eq("id", request.scriptId)
+        .eq("user_id", this.user.id)
         .single();
 
       if (error || !draft) {
-        throw new Error('Script draft not found');
+        throw new Error("Script draft not found");
       }
 
-      return draft;
+      return draft as unknown as ScriptDraft;
     } else {
       // Create new draft
       const { data: draft, error } = await supabase
-        .from('script_drafts')
+        .from("script_drafts")
         .insert({
           user_id: this.user.id,
-          title: 'Nouveau Script',
-          status: 'draft',
-          current_script: '',
+          title: "Nouveau Script",
+          status: "draft",
+          current_script: "",
           messages: [],
           output_language: request.outputLanguage,
           editorial_profile_id: request.editorialProfileId,
@@ -364,10 +382,10 @@ export class ScriptChatService {
         .single();
 
       if (error || !draft) {
-        throw new Error('Failed to create script draft');
+        throw new Error("Failed to create script draft");
       }
 
-      return draft;
+      return draft as unknown as ScriptDraft;
     }
   }
 
@@ -382,45 +400,48 @@ export class ScriptChatService {
     // Calculate metadata
     const wordCount = newScript.split(/\s+/).length;
     const estimatedDuration = estimateScriptDuration(newScript);
-    
+
     // Generate intelligent title from first user message or script content
     const title = await this.generateIntelligentTitle(newMessages, newScript);
 
-         // Get current draft to merge messages
-     const { data: currentDraft, error: fetchError } = await supabase
-       .from('script_drafts')
-       .select('messages, version')
-       .eq('id', scriptId)
-       .single();
+    // Get current draft to merge messages
+    const { data: currentDraft, error: fetchError } = await supabase
+      .from("script_drafts")
+      .select("messages, version")
+      .eq("id", scriptId)
+      .single();
 
-     if (fetchError) {
-       throw new Error('Failed to fetch current draft');
-     }
-
-     const allMessages = [...(currentDraft.messages || []), ...newMessages];
-
-     // Update draft
-     const { data: updatedDraft, error } = await supabase
-       .from('script_drafts')
-       .update({
-         title,
-         current_script: newScript,
-         messages: allMessages,
-         word_count: wordCount,
-         estimated_duration: estimatedDuration,
-         message_count: allMessages.length,
-         updated_at: new Date().toISOString(),
-         version: (currentDraft.version || 1) + 1,
-       })
-       .eq('id', scriptId)
-       .select()
-       .single();
-
-    if (error || !updatedDraft) {
-      throw new Error('Failed to update script draft');
+    if (fetchError) {
+      throw new Error("Failed to fetch current draft");
     }
 
-    return updatedDraft;
+    const allMessages = [
+      ...((currentDraft.messages as unknown as ChatMessage[]) || []),
+      ...newMessages,
+    ];
+
+    // Update draft
+    const { data: updatedDraft, error } = await supabase
+      .from("script_drafts")
+      .update({
+        title,
+        current_script: newScript,
+        messages: allMessages as unknown as Json[],
+        word_count: wordCount,
+        estimated_duration: estimatedDuration,
+        message_count: allMessages.length,
+        updated_at: new Date().toISOString(),
+        version: (currentDraft.version || 1) + 1,
+      })
+      .eq("id", scriptId)
+      .select()
+      .single();
+
+    if (error || !updatedDraft) {
+      throw new Error("Failed to update script draft");
+    }
+
+    return updatedDraft as unknown as ScriptDraft;
   }
 
   /**
@@ -430,19 +451,19 @@ export class ScriptChatService {
     if (!profileId) {
       // Get user's default editorial profile
       const { data: profile, error } = await supabase
-        .from('editorial_profiles')
-        .select('*')
-        .eq('user_id', this.user.id)
+        .from("editorial_profiles")
+        .select("*")
+        .eq("user_id", this.user.id)
         .single();
 
       return profile || this.getDefaultEditorialProfile();
     }
 
     const { data: profile, error } = await supabase
-      .from('editorial_profiles')
-      .select('*')
-      .eq('id', profileId)
-      .eq('user_id', this.user.id)
+      .from("editorial_profiles")
+      .select("*")
+      .eq("id", profileId)
+      .eq("user_id", this.user.id)
       .single();
 
     return profile || this.getDefaultEditorialProfile();
@@ -453,10 +474,12 @@ export class ScriptChatService {
    */
   private getDefaultEditorialProfile() {
     return {
-      persona_description: 'Créateur de contenu professionnel axé sur une communication claire et engageante',
-      tone_of_voice: 'Conversationnel et amical, tout en restant professionnel',
-      audience: 'Professionnels passionnés par la productivité et l\'innovation',
-      style_notes: 'Explications claires avec des exemples pratiques, maintenant un équilibre entre informatif et engageant',
+      persona_description:
+        "Créateur de contenu professionnel axé sur une communication claire et engageante",
+      tone_of_voice: "Conversationnel et amical, tout en restant professionnel",
+      audience: "Professionnels passionnés par la productivité et l'innovation",
+      style_notes:
+        "Explications claires avec des exemples pratiques, maintenant un équilibre entre informatif et engageant",
     };
   }
 
@@ -471,30 +494,36 @@ export class ScriptChatService {
   ): any[] {
     // Get the structured prompt from prompt bank
     const promptTemplate = PromptService.fillPromptTemplate(
-      'script-chat-conversation-agent',
+      "script-chat-conversation-agent",
       {
         messageHistory: this.formatMessageHistory(previousMessages),
         currentMessage: currentMessage,
         editorialProfile: this.formatEditorialProfile(editorialProfile),
-        outputLanguage: 'fr', // Default to French, should be passed from request
+        outputLanguage: "fr", // Default to French, should be passed from request
         currentScript: this.getCurrentScriptFromMessages(previousMessages),
-        tiktokAnalysis: tiktokContext || 'Aucune analyse TikTok disponible pour ce compte.',
+        tiktokAnalysis:
+          tiktokContext || "Aucune analyse TikTok disponible pour ce compte.",
       }
     );
 
     if (!promptTemplate) {
       // Fallback to basic prompt if template not found
-      console.warn('⚠️ Script chat prompt template not found, using fallback');
-      return this.buildFallbackConversationHistory(previousMessages, currentMessage, editorialProfile, tiktokContext);
+      console.warn("⚠️ Script chat prompt template not found, using fallback");
+      return this.buildFallbackConversationHistory(
+        previousMessages,
+        currentMessage,
+        editorialProfile,
+        tiktokContext
+      );
     }
 
     const systemMessage = {
-      role: 'system',
+      role: "system",
       content: promptTemplate.system,
     };
 
     const userMessage = {
-      role: 'user',
+      role: "user",
       content: promptTemplate.user,
     };
 
@@ -502,7 +531,7 @@ export class ScriptChatService {
     const messages = [systemMessage];
 
     // Add previous conversation history (excluding the current message)
-    previousMessages.forEach(msg => {
+    previousMessages.forEach((msg) => {
       messages.push({
         role: msg.role,
         content: msg.content,
@@ -523,10 +552,12 @@ export class ScriptChatService {
       return "No previous messages - this is the start of a new conversation.";
     }
 
-    return messages.map(msg => {
-      const timestamp = new Date(msg.timestamp).toLocaleTimeString();
-      return `[${timestamp}] ${msg.role.toUpperCase()}: ${msg.content}`;
-    }).join('\n\n');
+    return messages
+      .map((msg) => {
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        return `[${timestamp}] ${msg.role.toUpperCase()}: ${msg.content}`;
+      })
+      .join("\n\n");
   }
 
   /**
@@ -538,10 +569,10 @@ export class ScriptChatService {
     }
 
     return `
-**Persona:** ${profile.persona_description || 'Non défini'}
-**Ton de voix:** ${profile.tone_of_voice || 'Non défini'}
-**Audience cible:** ${profile.audience || 'Non défini'}
-**Notes de style:** ${profile.style_notes || 'Non défini'}
+**Persona:** ${profile.persona_description || "Non défini"}
+**Ton de voix:** ${profile.tone_of_voice || "Non défini"}
+**Audience cible:** ${profile.audience || "Non défini"}
+**Notes de style:** ${profile.style_notes || "Non défini"}
     `.trim();
   }
 
@@ -556,9 +587,10 @@ export class ScriptChatService {
     // Find the most recent script content from assistant messages
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg && msg.role === 'assistant' && msg.content) {
+      if (msg && msg.role === "assistant" && msg.content) {
         const script = this.extractScriptFromResponse(msg.content);
-        if (script && script.length > 10) { // Basic validation
+        if (script && script.length > 10) {
+          // Basic validation
           return script;
         }
       }
@@ -576,7 +608,7 @@ export class ScriptChatService {
     tiktokContext?: string | null
   ): any[] {
     const systemMessage = {
-      role: 'system',
+      role: "system",
       content: `Tu es un expert en création de scripts pour les vidéos courtes (TikTok, Instagram Reels, YouTube Shorts).
 
 Tu aides les créateurs à développer et affiner leurs scripts en mode conversationnel.
@@ -592,7 +624,7 @@ PROFIL ÉDITORIAL:
 - Audience: ${editorialProfile.audience}
 - Style: ${editorialProfile.style_notes}
 
-${tiktokContext ? `\n${tiktokContext}\n` : ''}
+${tiktokContext ? `\n${tiktokContext}\n` : ""}
 
 STRUCTURE RECOMMANDÉE:
 1. Accroche (1-2 lignes): captiver l'attention
@@ -613,7 +645,7 @@ Si l'utilisateur demande des modifications, applique-les et fournis le script mi
     const messages = [systemMessage];
 
     // Add previous conversation history
-    previousMessages.forEach(msg => {
+    previousMessages.forEach((msg) => {
       messages.push({
         role: msg.role,
         content: msg.content,
@@ -622,7 +654,7 @@ Si l'utilisateur demande des modifications, applique-les et fournis le script mi
 
     // Add current user message
     messages.push({
-      role: 'user',
+      role: "user",
       content: currentMessage,
     });
 
@@ -632,11 +664,16 @@ Si l'utilisateur demande des modifications, applique-les et fournis le script mi
   /**
    * Generate intelligent title using AI
    */
-  private async generateIntelligentTitle(messages: ChatMessage[], script: string): Promise<string> {
+  private async generateIntelligentTitle(
+    messages: ChatMessage[],
+    script: string
+  ): Promise<string> {
     try {
       // Use the first user message to generate a descriptive title
-      const firstUserMessage = messages.find(msg => msg.role === 'user')?.content;
-      
+      const firstUserMessage = messages.find(
+        (msg) => msg.role === "user"
+      )?.content;
+
       if (!firstUserMessage) {
         return generateScriptTitle(script);
       }
@@ -657,10 +694,10 @@ Exemples:
 Réponds uniquement avec le titre, sans guillemets ni explications.`;
 
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Use faster model for title generation
+        model: "gpt-4o-mini", // Use faster model for title generation
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: titlePrompt,
           },
         ],
@@ -669,15 +706,15 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       });
 
       const generatedTitle = completion.choices[0]?.message?.content?.trim();
-      
+
       if (generatedTitle && generatedTitle.length <= 50) {
         return generatedTitle;
       }
-      
+
       // Fallback to simple title generation
       return generateScriptTitle(script);
     } catch (error) {
-      console.warn('Failed to generate AI title, using fallback:', error);
+      console.warn("Failed to generate AI title, using fallback:", error);
       return generateScriptTitle(script);
     }
   }
@@ -698,10 +735,10 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   } {
     try {
       const parsed = JSON.parse(response);
-      
+
       // Validate required fields
       if (!parsed.conversation) {
-        throw new Error('Missing conversation field in structured response');
+        throw new Error("Missing conversation field in structured response");
       }
 
       // Calculate metadata if script is provided
@@ -711,7 +748,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         metadata = {
           wordCount: words,
           estimatedDuration: Math.round(words * 0.4), // ~150 words per minute = 0.4 seconds per word
-          status: metadata.status || 'draft',
+          status: metadata.status || "draft",
           nextSteps: metadata.nextSteps,
         };
       }
@@ -723,8 +760,11 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         metadata,
       };
     } catch (error) {
-      console.warn('⚠️ Failed to parse structured response, falling back to extraction:', error);
-      
+      console.warn(
+        "⚠️ Failed to parse structured response, falling back to extraction:",
+        error
+      );
+
       // Fallback to old extraction method
       const extractedScript = this.extractScriptFromResponse(response);
       return {
@@ -733,8 +773,10 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         hasScriptUpdate: true,
         metadata: {
           wordCount: extractedScript.split(/\s+/).length,
-          estimatedDuration: Math.round(extractedScript.split(/\s+/).length * 0.4),
-          status: 'draft',
+          estimatedDuration: Math.round(
+            extractedScript.split(/\s+/).length * 0.4
+          ),
+          status: "draft",
         },
       };
     }
@@ -777,10 +819,10 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       if (previousScript === newScript) return;
 
       // Log to general logs table
-      await supabase.from('logs').insert({
+      await supabase.from("logs").insert({
         user_id: this.user.id,
-        action: 'script_version_update',
-        resource_type: 'script_draft',
+        action: "script_version_update",
+        resource_type: "script_draft",
         resource_id: scriptId,
         metadata: {
           previous_script: previousScript,
@@ -795,27 +837,9 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         },
       });
 
-      // Track for RL training data (future fine-tuning)
-      await supabase.from('rl_training_data').insert({
-        user_id: this.user.id,
-        input_context: JSON.stringify({
-          previous_script: previousScript,
-          user_feedback: userMessage,
-          editorial_profile: editorialProfile,
-        }),
-        model_output: newScript,
-        feedback_type: 'script_improvement',
-        quality_score: null, // To be filled by user feedback later
-        metadata: {
-          script_id: scriptId,
-          improvement_type: this.classifyImprovementType(userMessage),
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      console.log('✅ Script version tracked for analytics');
+      console.log("✅ Script version tracked for analytics");
     } catch (error) {
-      console.warn('⚠️ Failed to track script version:', error);
+      console.warn("⚠️ Failed to track script version:", error);
       // Don't throw - this shouldn't break the main flow
     }
   }
@@ -825,16 +849,23 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
    */
   private classifyImprovementType(userMessage: string): string {
     const message = userMessage.toLowerCase();
-    
-    if (message.includes('émotion') || message.includes('sentiment')) return 'emotional_enhancement';
-    if (message.includes('court') || message.includes('raccourcir')) return 'length_reduction';
-    if (message.includes('long') || message.includes('développer')) return 'length_expansion';
-    if (message.includes('ton') || message.includes('style')) return 'tone_adjustment';
-    if (message.includes('clair') || message.includes('simple')) return 'clarity_improvement';
-    if (message.includes('accroche') || message.includes('hook')) return 'hook_enhancement';
-    if (message.includes('conclusion') || message.includes('fin')) return 'conclusion_improvement';
-    
-    return 'general_improvement';
+
+    if (message.includes("émotion") || message.includes("sentiment"))
+      return "emotional_enhancement";
+    if (message.includes("court") || message.includes("raccourcir"))
+      return "length_reduction";
+    if (message.includes("long") || message.includes("développer"))
+      return "length_expansion";
+    if (message.includes("ton") || message.includes("style"))
+      return "tone_adjustment";
+    if (message.includes("clair") || message.includes("simple"))
+      return "clarity_improvement";
+    if (message.includes("accroche") || message.includes("hook"))
+      return "hook_enhancement";
+    if (message.includes("conclusion") || message.includes("fin"))
+      return "conclusion_improvement";
+
+    return "general_improvement";
   }
 
   /**
@@ -847,58 +878,68 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   /**
    * Get TikTok analysis context for the user
    */
-  private async getTikTokAnalysisContext(scriptId: string): Promise<string | null> {
+  private async getTikTokAnalysisContext(
+    scriptId: string
+  ): Promise<string | null> {
     try {
-      console.log('🎯 Getting TikTok analysis context...');
-      
+      console.log("🎯 Getting TikTok analysis context...");
+
       // First, find the account_id associated with this script draft or user
       const { data: scriptDraft } = await supabase
-        .from('script_drafts')
-        .select('user_id')
-        .eq('id', scriptId)
+        .from("script_drafts")
+        .select("user_id")
+        .eq("id", scriptId)
         .single();
-      
+
       if (!scriptDraft) return null;
 
       const { data: analysis } = await supabase
-        .from('analyses')
-        .select('account_id')
-        .eq('user_id', scriptDraft.user_id)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false })
+        .from("analyses")
+        .select("account_id")
+        .eq("user_id", scriptDraft.user_id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
         .limit(1)
         .single();
 
       if (!analysis || !analysis.account_id) {
-        console.log('📭 No valid TikTok analysis found for this user.');
+        console.log("📭 No valid TikTok analysis found for this user.");
         return null;
       }
-      
+
       // ❗ REFACTORED: Fetch the full, comprehensive context via API call
       const accountId = analysis.account_id;
-      const analyzerUrl = process.env.ANALYZER_SERVICE_URL || 'http://localhost:3001';
-      const response = await fetch(`${analyzerUrl}/api/account-context/${accountId}`);
+      const analyzerUrl =
+        process.env.ANALYZER_SERVICE_URL || "http://localhost:3001";
+      const response = await fetch(
+        `${analyzerUrl}/api/account-context/${accountId}`
+      );
 
       if (!response.ok) {
-        console.warn(`⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`);
+        console.warn(
+          `⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`
+        );
         return null; // or fallback to a basic context
       }
 
       const fullContext: any = await response.json();
 
       if (!fullContext || !fullContext.account) {
-        console.warn(`⚠️ Could not retrieve full context via API for account ${accountId}`);
+        console.warn(
+          `⚠️ Could not retrieve full context via API for account ${accountId}`
+        );
         return null;
       }
 
-      console.log(`✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`);
+      console.log(
+        `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`
+      );
 
       // Format analysis context for the agent
       const context = this.formatTikTokAnalysisContext(fullContext);
       return context;
-
     } catch (error) {
-      console.error('❌ Error fetching TikTok analysis context:', error);
+      console.error("❌ Error fetching TikTok analysis context:", error);
       return null;
     }
   }
@@ -916,25 +957,43 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
     let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
 
     if (stats) {
-      context += `\n### 📊 Données du compte\n- **Abonnés :** ${stats.followers_count?.toLocaleString() || 'N/A'}\n- **Vidéos :** ${stats.videos_count || 'N/A'}\n- **Taux d'engagement :** ${stats.engagement_rate?.toFixed(2) || 'N/A'}%\n`;
+      context += `\n### 📊 Données du compte\n- **Abonnés :** ${
+        stats.followers_count?.toLocaleString() || "N/A"
+      }\n- **Vidéos :** ${
+        stats.videos_count || "N/A"
+      }\n- **Taux d'engagement :** ${
+        stats.engagement_rate?.toFixed(2) || "N/A"
+      }%\n`;
     }
 
     if (aggregates) {
-      context += `\n### 🚀 Indicateurs Clés\n- **Vues moyennes:** ${Math.round(aggregates.avg_views || 0).toLocaleString()}\n- **Meilleur moment pour poster (UTC):** ${aggregates.best_posting_time || 'N/A'}\n- **Fréquence de publication:** ~${Math.round(aggregates.posting_frequency_weekly || 0)} vidéos/semaine\n`;
+      context += `\n### 🚀 Indicateurs Clés\n- **Vues moyennes:** ${Math.round(
+        aggregates.avg_views || 0
+      ).toLocaleString()}\n- **Meilleur moment pour poster (UTC):** ${
+        aggregates.best_posting_time || "N/A"
+      }\n- **Fréquence de publication:** ~${Math.round(
+        aggregates.posting_frequency_weekly || 0
+      )} vidéos/semaine\n`;
     }
 
     if (insights) {
       if (insights.profile_summary) {
-        context += `\n### 🎯 Profil & Audience (par l'IA)\n- **Niche:** ${insights.profile_summary.niche || 'Non définie'}\n- **Audience:** ${insights.profile_summary.audience_profile?.description || 'Non défini'}\n`;
+        context += `\n### 🎯 Profil & Audience (par l'IA)\n- **Niche:** ${
+          insights.profile_summary.niche || "Non définie"
+        }\n- **Audience:** ${
+          insights.profile_summary.audience_profile?.description || "Non défini"
+        }\n`;
       }
       if (insights.content_analysis?.content_pillars) {
-        context += `\n### 🎨 Piliers de Contenu\n${insights.content_analysis.content_pillars.map((p: any) => `- **${p.name}**`).join('\n')}\n`;
+        context += `\n### 🎨 Piliers de Contenu\n${insights.content_analysis.content_pillars
+          .map((p: any) => `- **${p.name}**`)
+          .join("\n")}\n`;
       }
       if (insights.recommendations?.content_strategy) {
         context += `\n### 🔥 Recommandation Stratégique Clé\n- ${insights.recommendations.content_strategy[0]?.action}\n`;
       }
     }
-    
+
     context += `\n---
 **💡 Instructions pour l'agent de script :**
 - Utilise ces données pour personnaliser tes recommandations de script.
@@ -943,4 +1002,4 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
 
     return context;
   }
-} 
+}

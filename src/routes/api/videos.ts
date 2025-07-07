@@ -149,6 +149,9 @@ function determineErrorStatusCode(error: any): number {
 export async function getVideoStatusHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    if (!id) {
+      return errorResponseExpress(res, "Video ID is required", HttpStatus.BAD_REQUEST);
+    }
     console.log("id- +api", id);
     // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;

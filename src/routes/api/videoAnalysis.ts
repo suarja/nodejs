@@ -27,54 +27,43 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
       return res.status(authError.status).json(authError);
     }
 
-    const { s3Key, fileName, fileSize } = req.body;
-
+    const { videoUrl } = req.body;
+    console.log("videoUrl", videoUrl);
     // Validate required fields
-    if (!s3Key || !fileName || !fileSize) {
+    if (!videoUrl) {
       return res.status(400).json({
         success: false,
-        error: "s3Key, fileName, and fileSize are required",
+        error: "videoUrl is required",
       });
     }
 
-    // Validate file size (max 100MB)
-    const maxFileSize = 100 * 1024 * 1024; // 100MB
-    if (fileSize > maxFileSize) {
-      return res.status(400).json({
-        success: false,
-        error: "File size too large. Maximum size is 100MB.",
-      });
-    }
+    // Step 3: Analyze video with Gemini
+    let analysisResult: GeminiAnalysisResponse | null = null;
+    try {
+      analysisResult = await geminiService.analyzeVideoFromS3(videoUrl);
 
-    console.log(
-      `📤 Starting video analysis for user ${
-        user!.id
-      }: ${fileName} (${fileSize} bytes)`
-    );
+      if (!analysisResult.success) {
+        throw new Error(analysisResult.error || "Analysis failed");
+      }
+    } catch (analysisError) {
+      console.error("❌ Video analysis failed:", analysisError);
 
-    // Step 2: Analyze video with Gemini
-    const analysisResult: GeminiAnalysisResponse =
-      await geminiService.analyzeVideoFromS3(s3Key, fileName, fileSize);
-
-    if (!analysisResult.success) {
-      console.error(
-        `❌ Video analysis failed for user ${user!.id}:`,
-        analysisResult.error
-      );
       return res.status(500).json({
         success: false,
-        error: analysisResult.error || "Video analysis failed",
-        analysis_time: analysisResult.analysis_time,
+        error:
+          analysisError instanceof Error
+            ? analysisError.message
+            : "Analysis failed",
       });
     }
 
     console.log(
-      `✅ Video analysis completed for user ${user!.id} in ${
+      `✅ Video processing completed for user ${user!.id} in ${
         analysisResult.analysis_time
-      }ms`
+      }ms, analysisResult: ${JSON.stringify(analysisResult, null, 2)}`
     );
 
-    // Step 3: Return analysis results
+    // Step 5: Return success response
     return res.status(200).json({
       success: true,
       data: {

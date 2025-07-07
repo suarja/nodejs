@@ -455,7 +455,7 @@ export class VideoGeneratorService {
           script_id: scriptDraft.id, // Link to existing script
           render_status: 'queued',
           selected_videos: payload.selectedVideos.map((v) => v.id),
-          caption_config: payload.captionConfig || null,
+          caption_config: (payload.captionConfig as any) || null,
           output_language: payload.outputLanguage || null,
           created_at: new Date().toISOString(),
         })
@@ -494,7 +494,7 @@ export class VideoGeneratorService {
           user_id: this.user.id,
           render_status: 'queued',
           selected_videos: payload.selectedVideos.map((v) => v.id),
-          caption_config: payload.captionConfig || null,
+          caption_config: (payload.captionConfig as any) || null,
           output_language: payload.outputLanguage || null,
           created_at: new Date().toISOString(),
         })
@@ -669,6 +669,16 @@ export class VideoGeneratorService {
         .select()
         .single();
 
+      if (!script) {
+        throw VideoValidationService.createError(
+          'Failed to save script to database',
+          'SCRIPT_SAVE_ERROR',
+          { originalError: scriptError },
+          true,
+          'Failed to save the generated script. Please try again.'
+        );
+      }
+
       await supabase
         .from('video_requests')
         .update({
@@ -741,9 +751,9 @@ export class VideoGeneratorService {
       // Validate and transform videos using the validation service
       const validatedVideos: ValidatedVideo[] = videos.map((video) => ({
         id: video.id,
-        url: video.upload_url,
+        url: video.upload_url || '' ,
         title: video.title,
-        description: video.description,
+        description: video.description || '',
         tags: video.tags || [],
       }));
 
