@@ -4,41 +4,47 @@ This guide explains how to deploy the video analysis service to Railway with FFm
 
 ## 🚂 Railway + FFmpeg Setup
 
-Based on [Railway FFmpeg Forum Discussion](https://railway.app/help/fix-ffmpeg-issues), we use system FFmpeg instead of npm packages.
+Due to nixpacks cache mount conflicts, we use a **custom Dockerfile** instead of nixpacks.toml.
 
 ### 1. Configuration Files
 
-**Create `nixpacks.toml` in project root:**
+**Create `Dockerfile` in project root:**
 
-```toml
-# Railway deployment configuration with FFmpeg support
-[phases.setup]
-nixPkgs = ['ffmpeg', 'nodejs_22']
+```dockerfile
+# Custom Dockerfile for Railway deployment with FFmpeg
+FROM node:22-alpine
 
-[phases.build]
-cmds = [
-    'npm ci --no-cache --prefer-offline',
-    'npm run build'
-]
+# Install FFmpeg
+RUN apk add --no-cache ffmpeg
 
-[start]
-cmd = 'npm start'
+# Set working directory
+WORKDIR /app
 
-[env]
-NODE_ENV = 'production'
-RAILWAY_ENVIRONMENT = 'production'
+# Copy package files
+COPY package*.json ./
 
-# Disable problematic cache mounts
-[variables]
-NIXPACKS_NO_CACHE = '1'
+# Install dependencies (no cache to avoid conflicts)
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Expose port (Railway will override this)
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "start"]
 ```
 
 **⚠️ Important Notes:**
 
-- Do NOT include `npm` in nixPkgs - it comes automatically with Node.js
-- Use `nodejs_22` (LTS) - latest stable and compatible with all packages
-- Include `--no-cache` flags to avoid Railway cache conflicts
-- Set `NIXPACKS_NO_CACHE = '1'` to disable problematic cache mounts
+- Do NOT use nixpacks.toml - it causes EBUSY cache conflicts
+- Use custom Dockerfile with Alpine Linux for smaller image
+- Node.js 22 LTS and FFmpeg installed via apk
+- No cache mounts to avoid Railway conflicts
 
 ### 2. Environment Variables
 
@@ -80,7 +86,7 @@ const ffmpegPath = execSync("which ffmpeg", { encoding: "utf8" }).trim();
 
 ### 5. Deployment Steps
 
-1. **Push code with correct nixpacks.toml**
+1. **Push code with correct Dockerfile**
 2. **Set environment variables in Railway dashboard**
 3. **Deploy and check logs**
 
@@ -200,9 +206,9 @@ The cache flags should prevent this issue permanently.
 
 **Solution:**
 
-1. Verify nixpacks.toml is in project root
+1. Verify Dockerfile is in project root
 2. Check Railway build logs for FFmpeg installation
-3. Ensure nixPkgs syntax is correct
+3. Ensure Dockerfile syntax is correct
 
 ### Conversion Failures
 
@@ -272,11 +278,35 @@ If you were using `@ffmpeg-installer/ffmpeg`:
 npm uninstall @ffmpeg-installer/ffmpeg
 ```
 
-2. **Update nixpacks.toml:**
+2. **Update Dockerfile:**
 
-```toml
-[phases.setup]
-nixPkgs = ['ffmpeg']
+```dockerfile
+# Custom Dockerfile for Railway deployment with FFmpeg
+FROM node:22-alpine
+
+# Install FFmpeg
+RUN apk add --no-cache ffmpeg
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (no cache to avoid conflicts)
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Expose port (Railway will override this)
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "start"]
 ```
 
 3. **Code already handles both environments automatically**
@@ -320,7 +350,7 @@ Installing ffmpeg via nixpkgs...
 
 **Solution:**
 
-- Ensure `nixpacks.toml` includes `ffmpeg` in nixPkgs
+- Ensure Dockerfile includes FFmpeg installation
 - Redeploy after adding configuration
 - Check logs for FFmpeg path detection
 
