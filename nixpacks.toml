@@ -2,7 +2,7 @@
 # Based on: https://railway.app/help/fix-ffmpeg-issues
 
 [phases.setup]
-nixPkgs = ['ffmpeg']
+nixPkgs = ['ffmpeg', 'nodejs_18']
 
 [phases.build]
 cmds = ['npm ci', 'npm run build']

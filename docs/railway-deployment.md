@@ -13,7 +13,7 @@ Based on [Railway FFmpeg Forum Discussion](https://railway.app/help/fix-ffmpeg-i
 ```toml
 # Railway deployment configuration with FFmpeg support
 [phases.setup]
-nixPkgs = ['ffmpeg']
+nixPkgs = ['ffmpeg', 'nodejs_18']
 
 [phases.build]
 cmds = [
@@ -32,8 +32,8 @@ RAILWAY_ENVIRONMENT = 'production'
 **⚠️ Important Notes:**
 
 - Do NOT include `npm` in nixPkgs - it comes automatically with Node.js
-- Do NOT include `nodejs_18` in nixPkgs - Railway installs Node.js automatically
-- Only include `ffmpeg` in nixPkgs
+- DO include `nodejs_18` in nixPkgs - Railway doesn't auto-detect Node.js projects
+- Only exclude `npm` from nixPkgs, not Node.js itself
 
 ### 2. Environment Variables
 
@@ -98,15 +98,33 @@ at /app/.nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix:19:26:
 ```
 
 **Solution:**
-
-Remove `npm` and `nodejs_18` from nixPkgs in nixpacks.toml:
+Remove only `npm` from nixPkgs in nixpacks.toml (keep nodejs_18):
 
 ```toml
 # ❌ Wrong
 nixPkgs = ['ffmpeg', 'nodejs_18', 'npm']
 
 # ✅ Correct
+nixPkgs = ['ffmpeg', 'nodejs_18']
+```
+
+### Build Error: "npm: command not found"
+
+**Error:**
+
+```
+/bin/bash: line 1: npm: command not found
+```
+
+**Solution:**
+Add `nodejs_18` back to nixPkgs - Railway doesn't auto-detect Node.js:
+
+```toml
+# ❌ Wrong (missing Node.js)
 nixPkgs = ['ffmpeg']
+
+# ✅ Correct
+nixPkgs = ['ffmpeg', 'nodejs_18']
 ```
 
 ### FFmpeg Not Found in Production
@@ -281,184 +299,7 @@ Installing ffmpeg via nixpkgs...
 
 ### Environment Differences
 
-| Environment       | FFmpeg Source   | Path Detection | Temp Directory |
-| ----------------- | --------------- | -------------- | -------------- |
-| **Railway**       | nixpkgs         | `which ffmpeg` | `/tmp`         |
-| **Local Mac**     | System/Homebrew | `which ffmpeg` | `./temp`       |
-| **Local Linux**   | System/apt      | `which ffmpeg` | `./temp`       |
-| **Local Windows** | npm package     | import path    | `./temp`       |
-
-## 📊 Deployment Process
-
-### 1. Railway Project Setup
-
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login and create project
-railway login
-railway init
-```
-
-### 2. Deploy to Railway
-
-```bash
-# Deploy current branch
-railway up
-
-# Or connect GitHub repository
-# Set up GitHub integration in Railway dashboard
-```
-
-### 3. Monitor Deployment
-
-```bash
-# View logs
-railway logs
-
-# View environment
-railway variables
-```
-
-### 4. Test Video Analysis
-
-```bash
-# Use our test script
-npm run test:video-analysis
-```
-
-## 🎯 Performance Optimization
-
-### Railway-Specific Optimizations
-
-1. **Memory Usage:**
-
-   - Railway provides 1GB RAM by default
-   - Large videos may require more memory
-   - Consider upgrading plan for heavy usage
-
-2. **Disk Space:**
-
-   - Ephemeral storage for temp files
-   - Clean up files immediately after processing
-   - No persistent storage needed for temp files
-
-3. **Processing Time:**
-   - Railway has request timeouts
-   - Large videos may need async processing
-   - Consider background job queues for long videos
-
-### FFmpeg Settings for Railway
-
-```typescript
-// Optimized FFmpeg args for Railway
-const ffmpegArgs = [
-  "-i",
-  inputPath,
-  "-c:v",
-  "libx264",
-  "-c:a",
-  "aac",
-  "-preset",
-  "fast", // Faster encoding
-  "-crf",
-  "28", // Slightly lower quality for speed
-  "-movflags",
-  "+faststart",
-  "-threads",
-  "2", // Limit threads for Railway
-  "-y",
-  outputPath,
-];
-```
-
-## 🔍 Debugging
-
-### Enable Debug Logs
-
-```typescript
-// Add to your Railway environment variables
-(DEBUG = ffmpeg), gemini, video - analysis;
-```
-
-### Check FFmpeg Installation
-
-```bash
-# SSH into Railway container (when available)
-which ffmpeg
-ffmpeg -version
-ls -la /nix/store/*/bin/ffmpeg
-```
-
-### Test FFmpeg Manually
-
-```bash
-# Test basic FFmpeg functionality
-ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=1 test.mp4
-```
-
-## 📈 Monitoring
-
-### Key Metrics to Monitor
-
-1. **Response Times:**
-
-   - Video download time
-   - FFmpeg conversion time
-   - Gemini analysis time
-   - Total request time
-
-2. **Error Rates:**
-
-   - FFmpeg failures
-   - Gemini API errors
-   - Network timeouts
-
-3. **Resource Usage:**
-   - Memory consumption
-   - CPU usage during conversion
-   - Disk space for temp files
-
-### Railway Logging
-
-```typescript
-// Structured logging for Railway
-console.log(
-  JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: "info",
-    message: "Video analysis started",
-    videoUrl: url,
-    environment: "railway",
-  })
-);
-```
-
-## 🚀 Production Checklist
-
-- [ ] `nixpacks.toml` configured with FFmpeg
-- [ ] Environment variables set in Railway
-- [ ] Code uses system FFmpeg detection
-- [ ] Temp file cleanup implemented
-- [ ] Error handling for Railway-specific issues
-- [ ] Monitoring and logging configured
-- [ ] Performance optimized for Railway limits
-- [ ] Test deployment works with sample video
-
-## 🆘 Support
-
-If you encounter issues:
-
-1. Check Railway logs: `railway logs`
-2. Verify FFmpeg installation in container
-3. Test with smaller video files first
-4. Reference [Railway FFmpeg Forum](https://railway.app/help/fix-ffmpeg-issues)
-5. Check our test script output
-
-## 📚 References
-
-- [Railway FFmpeg Issue Discussion](https://railway.app/help/fix-ffmpeg-issues)
-- [Nixpacks Configuration](https://nixpacks.com/docs/configuration)
-- [Railway Environment Variables](https://docs.railway.app/deploy/variables)
-- [FFmpeg Documentation](https://ffmpeg.org/documentation.html)
+| Environment   | FFmpeg Source   | Path Detection | Temp Directory |
+| ------------- | --------------- | -------------- | -------------- |
+| **Railway**   | nixpkgs         | `which ffmpeg` | `/tmp`         |
+| **Local Mac** | System/Homebrew | `              |
