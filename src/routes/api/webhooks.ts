@@ -1,6 +1,7 @@
-import { Router, Request, Response } from 'express';
-import { supabase } from '../../config/supabase';
-import { successResponseExpress } from '../../utils/api/responses';
+import { Router, Request, Response } from "express";
+import { supabase } from "../../config/supabase";
+import { successResponseExpress } from "../../utils/api/responses";
+import { logger } from "../../config/logger";
 
 const router = Router();
 
@@ -31,94 +32,105 @@ interface RenderMetadata {
 /**
  * Webhook endpoint for Creatomate render status updates
  */
-router.post('/creatomate', async (req: Request, res: Response) => {
+router.post("/creatomate", async (req: Request, res: Response) => {
   try {
     // Parse webhook payload
     const webhookData: CreatomateWebhookData = req.body;
-    console.log(
-      '📨 Received webhook from Creatomate:',
-      JSON.stringify({
-        id: webhookData.id,
-        status: webhookData.status,
-        hasUrl: !!webhookData.url,
-        hasMetadata: !!webhookData.metadata,
-      })
-    );
 
     // Parse metadata from string to object
     let metadata: RenderMetadata;
     try {
       metadata = webhookData.metadata ? JSON.parse(webhookData.metadata) : {};
     } catch (parseError) {
-      console.error('❌ Error parsing metadata:', parseError);
+      logger.error("❌ Error parsing metadata:", {
+        error: parseError,
+        metadata: webhookData.metadata,
+      });
       return res.status(400).json({
-        error: 'Invalid metadata format',
-        code: 'INVALID_METADATA',
+        error: "Invalid metadata format",
+        code: "INVALID_METADATA",
       });
     }
+
+    const creatomateWebhookChildLogger = logger.child({
+      module: "creatomateWebhook",
+      requestId: webhookData.id,
+      status: webhookData.status,
+      url: webhookData.url,
+      metadata: webhookData.metadata,
+      error: webhookData.error,
+      templateId: webhookData.template_id,
+      outputFormat: webhookData.output_format,
+    });
 
     const { requestId, userId } = metadata;
 
     // Validate required fields
     if (!requestId || !userId) {
-      console.error('❌ Missing required metadata fields:', metadata);
+      creatomateWebhookChildLogger.error(
+        "❌ Missing required metadata fields:",
+        metadata
+      );
       return res.status(400).json({
-        error: 'Missing required metadata fields',
-        code: 'MISSING_METADATA',
+        error: "Missing required metadata fields",
+        code: "MISSING_METADATA",
       });
     }
 
     // Verify the request exists
     const { data: requestData, error: requestError } = await supabase
-      .from('video_requests')
-      .select('id, user_id')
-      .eq('id', requestId)
+      .from("video_requests")
+      .select("id, user_id")
+      .eq("id", requestId)
       .single();
 
     if (requestError || !requestData) {
-      console.error('❌ Request verification failed:', requestError);
+      creatomateWebhookChildLogger.error(
+        "❌ Request verification failed:",
+        requestError
+      );
       return res.status(404).json({
-        error: 'Invalid request ID',
-        code: 'REQUEST_NOT_FOUND',
+        error: "Invalid request ID",
+        code: "REQUEST_NOT_FOUND",
       });
     }
 
     // Security check: ensure the user ID matches
     if (requestData.user_id !== userId) {
-      console.error('❌ User ID mismatch:', {
+      creatomateWebhookChildLogger.error("❌ User ID mismatch:", {
         requestUserId: requestData.user_id,
         metadataUserId: userId,
       });
       return res.status(403).json({
-        error: 'User ID mismatch',
-        code: 'USER_MISMATCH',
+        error: "User ID mismatch",
+        code: "USER_MISMATCH",
       });
     }
 
     // Update video request status based on render status
     let updateData: Record<string, any> = {};
 
-    if (webhookData.status === 'succeeded') {
+    if (webhookData.status === "succeeded") {
       updateData = {
-        render_status: 'done',
+        render_status: "done",
         render_url: webhookData.url,
       };
-      console.log(
+      creatomateWebhookChildLogger.info(
         `✅ Render succeeded for request ${requestId}, URL: ${webhookData.url}`
       );
-    } else if (webhookData.status === 'failed') {
+    } else if (webhookData.status === "failed") {
       updateData = {
-        render_status: 'error',
-        render_error: webhookData.error || 'Unknown error',
+        render_status: "error",
+        error_message: webhookData.error || "Unknown error",
       };
-      console.log(
+      creatomateWebhookChildLogger.info(
         `❌ Render failed for request ${requestId}: ${
-          webhookData.error || 'Unknown error'
+          webhookData.error || "Unknown error"
         }`
       );
     } else {
       // For any other status, we log but don't update
-      console.log(
+      creatomateWebhookChildLogger.info(
         `📝 Received status ${webhookData.status} for request ${requestId}`
       );
       return res.json({
@@ -129,54 +141,68 @@ router.post('/creatomate', async (req: Request, res: Response) => {
 
     // Update the database
     const { error: updateError } = await supabase
-      .from('video_requests')
+      .from("video_requests")
       .update(updateData)
-      .eq('id', requestId);
+      .eq("id", requestId);
 
     if (updateError) {
-      console.error('❌ Error updating video request:', updateError);
+      creatomateWebhookChildLogger.error(
+        "❌ Error updating video request:",
+        updateError
+      );
       return res.status(500).json({
-        error: 'Failed to update video request',
-        code: 'UPDATE_FAILED',
+        error: "Failed to update video request",
+        code: "UPDATE_FAILED",
       });
     }
 
     // Only increment usage counter on successful renders
-    if (webhookData.status === 'succeeded') {
+    if (webhookData.status === "succeeded") {
       try {
         // Increment user's videos_generated counter by first getting current value
         const { data: currentUsage, error: fetchError } = await supabase
-          .from('user_usage')
-          .select('videos_generated')
-          .eq('user_id', userId)
+          .from("user_usage")
+          .select("videos_generated")
+          .eq("user_id", userId)
           .single();
 
         if (fetchError) {
-          console.error('❌ Error fetching current usage:', fetchError);
+          creatomateWebhookChildLogger.error(
+            "❌ Error fetching current usage:",
+            fetchError
+          );
           return;
         }
 
         const { error: usageError } = await supabase
-          .from('user_usage')
-          .update({ 
+          .from("user_usage")
+          .update({
             videos_generated: (currentUsage?.videos_generated || 0) + 1,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('user_id', userId);
-        
+          .eq("user_id", userId);
+
         if (usageError) {
-          console.error('❌ Error incrementing videos_generated:', usageError);
+          creatomateWebhookChildLogger.error(
+            "❌ Error incrementing videos_generated:",
+            usageError
+          );
         } else {
-          console.log(`✅ Incremented videos_generated for user ${userId}`);
+          creatomateWebhookChildLogger.info(
+            `✅ Incremented videos_generated for user ${userId}`
+          );
         }
       } catch (error) {
-        console.error('❌ Error updating user usage:', error);
+        creatomateWebhookChildLogger.error(
+          "❌ Error updating user usage:",
+          error
+        );
       }
     }
 
     // Log the activity (optional, non-blocking)
     try {
-      await supabase.from('logs').insert({
+      await supabase.from("logs").insert({
         user_id: userId,
         action: `render_${webhookData.status}`,
         metadata: {
@@ -191,25 +217,32 @@ router.post('/creatomate', async (req: Request, res: Response) => {
         created_at: new Date().toISOString(),
       });
     } catch (logError) {
-      console.warn('⚠️ Error logging activity:', logError);
+      creatomateWebhookChildLogger.warn("⚠️ Error logging activity:", logError);
     }
 
     return res.json({
       success: true,
-      message: 'Status updated successfully',
+      message: "Status updated successfully",
       requestId,
       status: webhookData.status,
     });
   } catch (error) {
-    console.error('❌ Error processing webhook:', error);
+    logger.error("❌ Error processing webhook:", {
+      error,
+      requestId: req.body.id,
+      status: req.body.status,
+      url: req.body.url,
+      metadata: req.body.metadata,
+      templateId: req.body.template_id,
+    });
     res.status(500).json({
-      error: 'Failed to process webhook',
-      code: 'WEBHOOK_ERROR',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      error: "Failed to process webhook",
+      code: "WEBHOOK_ERROR",
+      message: error instanceof Error ? error.message : "Unknown error",
     });
   }
   return successResponseExpress(res, {
-    message: 'Webhook processed successfully',
+    message: "Webhook processed successfully",
   });
 });
 
