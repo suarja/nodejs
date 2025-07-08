@@ -17,3 +17,4 @@ cmd = 'npm start'
 [env]
 NODE_ENV = 'production'
 RAILWAY_ENVIRONMENT = 'production'
+
