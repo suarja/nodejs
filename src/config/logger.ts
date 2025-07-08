@@ -5,7 +5,7 @@ import { LogtailTransport } from "@logtail/winston";
 const { combine, timestamp, json, errors } = format;
 
 export const logtail = new Logtail(process.env.SOURCE_TOKEN!, {
-  endpoint: "https://s1373207.eu-nbg-2.betterstackdata.com",
+  endpoint: process.env.LOGTAIL_ENDPOINT!,
 });
 
 export const logger = winston.createLogger({

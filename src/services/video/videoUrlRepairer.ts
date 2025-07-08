@@ -240,26 +240,6 @@ export class VideoUrlRepairer {
   }
 
   /**
-   * Repair URLs in a scene plan object
-   * @param scenePlan The scene plan from planVideoStructure
-   */
-  repairScenePlan(scenePlan: any): void {
-    if (!scenePlan.scenes || !Array.isArray(scenePlan.scenes)) {
-      return;
-    }
-
-    scenePlan.scenes.forEach((scene: any, index: number) => {
-      if (scene.video_asset?.url) {
-        scene.video_asset.url = this.repairUrl(
-          scene.video_asset.url,
-          scene.video_asset.id,
-          `plan_structure_scene_${index}`
-        );
-      }
-    });
-  }
-
-  /**
    * Repair URLs in a Creatomate template
    * @param template The template from generateTemplate
    */
