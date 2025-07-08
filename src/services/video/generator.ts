@@ -1,23 +1,26 @@
-import { User } from '@supabase/supabase-js';
-import { supabase } from '../../config/supabase';
-import { ScriptGenerator } from '../scriptGenerator';
-import { ScriptReviewer } from '../scriptReviewer';
-import { CreatomateBuilder } from '../creatomateBuilder';
-import { MODELS } from '../../config/openai';
-import { PromptService } from '../promptService';
-import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
+import { User } from "@supabase/supabase-js";
+import { supabase } from "../../config/supabase";
+import { ScriptGenerator } from "../scriptGenerator";
+import { ScriptReviewer } from "../scriptReviewer";
+import { CreatomateBuilder } from "../creatomateBuilder";
+import { MODELS } from "../../config/openai";
+import { PromptService } from "../promptService";
+import { convertCaptionConfigToProperties } from "../../utils/video/preset-converter";
 import {
   EditorialProfile,
   VideoGenerationPayload,
   VideoValidationService,
-} from './validation';
-import { VideoGenerationResult, ValidatedVideo } from '../../types/video';
-export enum VideoRequestStatus {
-  QUEUED = 'queued',
-  RENDERING = 'rendering',
-  COMPLETED = 'done',
-  FAILED = 'error',
-}
+} from "./validation";
+import {
+  VideoGenerationResult,
+  ValidatedVideo,
+  CaptionConfiguration,
+} from "../../types/video";
+import { VideoUrlRepairer } from "./videoUrlRepairer";
+import winston from "winston";
+import { Database } from "../../config/supabase-types";
+import { VideoRequestStatus } from "../../types/video";
+import { logger } from "../../config/logger";
 /**
  * Enhanced video generation service with async background processing
  *
@@ -41,9 +44,9 @@ export class VideoGeneratorService {
    */
   constructor(user: User) {
     this.user = user;
-    this.scriptGenerator = ScriptGenerator.getInstance(MODELS['o4-mini']);
-    this.scriptReviewer = ScriptReviewer.getInstance(MODELS['o4-mini']);
-    this.creatomateBuilder = CreatomateBuilder.getInstance(MODELS['4.1']);
+    this.scriptGenerator = ScriptGenerator.getInstance(MODELS["o4-mini"]);
+    this.scriptReviewer = ScriptReviewer.getInstance(MODELS["o4-mini"]);
+    this.creatomateBuilder = CreatomateBuilder.getInstance(MODELS["4.1"]);
   }
 
   /**
@@ -55,22 +58,27 @@ export class VideoGeneratorService {
    * @returns The result with request ID for immediate response
    */
   async generateVideoFromScript(
-    scriptDraft: any,
-    payload: VideoGenerationPayload
+    scriptDraft: Database["public"]["Tables"]["script_drafts"]["Row"],
+    payload: VideoGenerationPayload,
+    logger: winston.Logger
   ): Promise<VideoGenerationResult> {
     const startTime = Date.now();
 
     try {
-      console.log(`🎬 Starting video generation from script ${scriptDraft.id} for user ${this.user.id}`);
+      logger.info(
+        `🎬 Starting video generation from script ${scriptDraft.id} for user ${this.user.id}`
+      );
 
       // Step 1: Create video request record FIRST (this is what we return immediately)
       const videoRequest = await this.withTimeout(
         this.createVideoRequestFromScript(scriptDraft, payload),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
-        'Database operation timed out'
+        "Database operation timed out"
       );
 
-      console.log(`✅ Video request created: ${videoRequest.id} - returning to frontend`);
+      logger.info(
+        `✅ Video request created: ${videoRequest.id} - returning to frontend`
+      );
 
       // Step 2: Script already linked in createVideoRequestFromScript - no need for additional update
 
@@ -78,26 +86,29 @@ export class VideoGeneratorService {
       this.processVideoFromScriptInBackground(
         videoRequest.id,
         payload,
-        scriptDraft
+        scriptDraft,
+        logger
       ).catch((error: any) => {
-        console.error(
+        logger.error(
           `❌ Background processing failed for request ${videoRequest.id}:`,
           error
         );
       });
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Video request from script created and returned in ${duration}ms`);
+      logger.info(
+        `✅ Video request from script created and returned in ${duration}ms`
+      );
 
       return {
         requestId: videoRequest.id,
-        scriptId: '', // Keep consistent with original (frontend doesn't use it anyway)
+        scriptId: "", // Keep consistent with original (frontend doesn't use it anyway)
         status: VideoRequestStatus.QUEUED,
         estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
       };
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(
+      logger.error(
         `❌ Video generation from script setup failed after ${duration}ms:`,
         error
       );
@@ -105,8 +116,8 @@ export class VideoGeneratorService {
       throw VideoValidationService.createError(
         error instanceof Error
           ? error.message
-          : 'Unknown error during video generation from script',
-        'VIDEO_GENERATION_FAILED',
+          : "Unknown error during video generation from script",
+        "VIDEO_GENERATION_FAILED",
         {
           userId: this.user.id,
           scriptId: scriptDraft.id,
@@ -114,7 +125,7 @@ export class VideoGeneratorService {
           originalError: error instanceof Error ? error.message : error,
         },
         true,
-        'Video generation failed. Please try again.'
+        "Video generation failed. Please try again."
       );
     }
   }
@@ -146,7 +157,7 @@ export class VideoGeneratorService {
       const videoRequest = await this.withTimeout(
         this.createVideoRequest(payload),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
-        'Database operation timed out'
+        "Database operation timed out"
       );
 
       console.log(
@@ -164,7 +175,7 @@ export class VideoGeneratorService {
             videoRequest.id
           ),
           VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
-          'Script generation timed out'
+          "Script generation timed out"
         );
       const scriptId = generatedScriptId;
 
@@ -173,7 +184,7 @@ export class VideoGeneratorService {
         videoRequest.id,
         payload,
         editorialProfile,
-        { scriptId, reviewedScript }
+        { scriptId, reviewedScript: prompt }
       ).catch((error) => {
         console.error(
           `❌ Background processing failed for request ${videoRequest.id}:`,
@@ -187,7 +198,7 @@ export class VideoGeneratorService {
 
       return {
         requestId: videoRequest.id,
-        scriptId: '', // Will be populated during background processing
+        scriptId: "", // Will be populated during background processing
         status: VideoRequestStatus.QUEUED,
         estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
       };
@@ -199,22 +210,22 @@ export class VideoGeneratorService {
       );
 
       // Transform and re-throw as VideoGenerationError
-      if (error instanceof Error && 'code' in error) {
+      if (error instanceof Error && "code" in error) {
         throw error; // Already a VideoGenerationError
       }
 
       throw VideoValidationService.createError(
         error instanceof Error
           ? error.message
-          : 'Unknown error during video generation setup',
-        'VIDEO_GENERATION_FAILED',
+          : "Unknown error during video generation setup",
+        "VIDEO_GENERATION_FAILED",
         {
           userId: this.user.id,
           duration,
           originalError: error instanceof Error ? error.message : error,
         },
         true, // Retryable
-        'Video generation failed. Please try again.'
+        "Video generation failed. Please try again."
       );
     }
   }
@@ -227,12 +238,15 @@ export class VideoGeneratorService {
   private async processVideoFromScriptInBackground(
     requestId: string,
     payload: VideoGenerationPayload,
-    scriptDraft: any
+    scriptDraft: Database["public"]["Tables"]["script_drafts"]["Row"],
+    logger: winston.Logger
   ): Promise<void> {
     const startTime = Date.now();
 
     try {
-      console.log(`🔄 Starting background processing from script for request ${requestId}`);
+      logger.info(
+        `🔄 Starting background processing from script for request ${requestId}`
+      );
 
       // Update status to processing
       await this.updateVideoRequestStatus(
@@ -240,28 +254,56 @@ export class VideoGeneratorService {
         VideoRequestStatus.RENDERING
       );
 
-      const { selectedVideos, voiceId, captionConfig, outputLanguage, editorialProfile } = payload;
+      const {
+        selectedVideos,
+        voiceId,
+        captionConfig,
+        outputLanguage,
+        editorialProfile,
+      } = payload;
 
       // Step 1: Fetch and validate videos (same as original)
       const videosObj = await this.withTimeout(
         this.fetchAndValidateVideos(selectedVideos),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
-        'Video validation timed out'
+        "Video validation timed out"
       );
+
+      // Step 1.5: Create URL repairer for fixing AI-generated URLs
+      const urlRepairer = new VideoUrlRepairer(videosObj);
 
       // Step 2: Generate Creatomate template using existing script
       const template = await this.withTimeout(
         this.generateTemplate(
-          scriptDraft.current_script, // Use existing script content
+          scriptDraft.current_script,
           videosObj,
           voiceId,
           editorialProfile,
           captionConfig,
-          outputLanguage
+          outputLanguage,
+          logger
         ),
         VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
-        'Template generation timed out'
+        "Template generation timed out"
       );
+
+      // Step 2.5: Repair any incorrect URLs in the template
+      logger.info("🔧 Repairing template URLs (script-based)...");
+      urlRepairer.repairTemplate(template);
+
+      // Validate that all URLs are now correct
+      urlRepairer.validateTemplate(template);
+
+      // Log repair summary
+      const repairSummary = urlRepairer.getRepairSummary();
+      if (repairSummary.totalCorrections > 0) {
+        logger.info("📋 URL repairs completed (script-based):", repairSummary);
+        logger.info("📋 Detailed corrections:", urlRepairer.getCorrections());
+      } else {
+        logger.info(
+          "✅ No URL repairs needed - all URLs were correct (script-based)"
+        );
+      }
 
       // Step 3: Store training data (fire and forget)
       this.storeTrainingDataAsync(
@@ -269,7 +311,7 @@ export class VideoGeneratorService {
         scriptDraft.current_script,
         template,
         requestId
-      ).catch((error) => console.warn('Training data storage failed:', error));
+      ).catch((error) => logger.warn("Training data storage failed:", error));
 
       // Step 4: Start Creatomate render
       const renderId = await this.withTimeout(
@@ -280,7 +322,7 @@ export class VideoGeneratorService {
           `Video from script: ${scriptDraft.title}`
         ),
         VideoGeneratorService.CREATOMATE_API_TIMEOUT,
-        'Creatomate render start timed out'
+        "Creatomate render start timed out"
       );
 
       // Step 5: Update video request with completion
@@ -292,12 +334,12 @@ export class VideoGeneratorService {
       });
 
       const duration = Date.now() - startTime;
-      console.log(
+      logger.info(
         `✅ Background processing from script completed for ${requestId} in ${duration}ms`
       );
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(
+      logger.error(
         `❌ Background processing from script failed for ${requestId} after ${duration}ms:`,
         error
       );
@@ -308,7 +350,7 @@ export class VideoGeneratorService {
         VideoRequestStatus.FAILED,
         error instanceof Error
           ? error.message
-          : 'Unknown error during processing'
+          : "Unknown error during processing"
       );
 
       // Attempt cleanup on failure
@@ -344,8 +386,12 @@ export class VideoGeneratorService {
       const videosObj = await this.withTimeout(
         this.fetchAndValidateVideos(selectedVideos),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
-        'Video validation timed out'
+        "Video validation timed out"
       );
+
+      // Step 2.5: Create URL repairer for fixing AI-generated URLs
+      const urlRepairer = new VideoUrlRepairer(videosObj);
+      console.log("🔧 URL repairer initialized for video validation");
 
       // Step 3: Generate Creatomate template
       const template = await this.withTimeout(
@@ -355,11 +401,28 @@ export class VideoGeneratorService {
           voiceId,
           editorialProfile,
           captionConfig,
-          outputLanguage
+          outputLanguage,
+          logger,
         ),
         VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
-        'Template generation timed out'
+        "Template generation timed out"
       );
+
+      // Step 3.5: Repair any incorrect URLs in the template
+      console.log("🔧 Repairing template URLs...");
+      urlRepairer.repairTemplate(template);
+
+      // Validate that all URLs are now correct
+      urlRepairer.validateTemplate(template);
+
+      // Log repair summary
+      const repairSummary = urlRepairer.getRepairSummary();
+      if (repairSummary.totalCorrections > 0) {
+        console.log("📋 URL repairs completed:", repairSummary);
+        console.log("📋 Detailed corrections:", urlRepairer.getCorrections());
+      } else {
+        console.log("✅ No URL repairs needed - all URLs were correct");
+      }
 
       // Step 4: Store training data (fire and forget)
       this.storeTrainingDataAsync(
@@ -367,7 +430,7 @@ export class VideoGeneratorService {
         script.reviewedScript,
         template,
         requestId
-      ).catch((error) => console.warn('Training data storage failed:', error));
+      ).catch((error) => console.warn("Training data storage failed:", error));
 
       // Step 5: Start Creatomate render
       const renderId = await this.withTimeout(
@@ -378,7 +441,7 @@ export class VideoGeneratorService {
           prompt
         ),
         VideoGeneratorService.CREATOMATE_API_TIMEOUT,
-        'Creatomate render start timed out'
+        "Creatomate render start timed out"
       );
 
       // Step 6: Update video request with completion
@@ -406,7 +469,7 @@ export class VideoGeneratorService {
         VideoRequestStatus.FAILED,
         error instanceof Error
           ? error.message
-          : 'Unknown error during processing'
+          : "Unknown error during processing"
       );
 
       // Attempt cleanup on failure
@@ -427,10 +490,10 @@ export class VideoGeneratorService {
       setTimeout(() => {
         const error = VideoValidationService.createError(
           timeoutMessage,
-          'OPERATION_TIMEOUT',
+          "OPERATION_TIMEOUT",
           { timeoutMs },
           true,
-          'Operation timed out. Please try again.'
+          "Operation timed out. Please try again."
         );
         reject(error);
       }, timeoutMs);
@@ -444,37 +507,40 @@ export class VideoGeneratorService {
    * @private
    */
   private async createVideoRequestFromScript(
-    scriptDraft: any,
+    scriptDraft: Database["public"]["Tables"]["script_drafts"]["Row"],
     payload: VideoGenerationPayload
   ): Promise<{ id: string }> {
     try {
       const { data, error } = await supabase
-        .from('video_requests')
+        .from("video_requests")
         .insert({
           user_id: this.user.id,
           script_id: scriptDraft.id, // Link to existing script
-          render_status: 'queued',
+          render_status: "queued",
           selected_videos: payload.selectedVideos.map((v) => v.id),
           caption_config: (payload.captionConfig as any) || null,
           output_language: payload.outputLanguage || null,
           created_at: new Date().toISOString(),
         })
-        .select('id')
+        .select("id")
         .single();
 
       if (error || !data) {
         throw VideoValidationService.createError(
-          'Failed to create video request from script',
-          'DATABASE_ERROR',
+          "Failed to create video request from script",
+          "DATABASE_ERROR",
           { error: error?.message },
           true,
-          'Unable to queue video request. Please try again.'
+          "Unable to queue video request. Please try again."
         );
       }
 
       return data;
     } catch (error) {
-      console.error('Database error creating video request from script:', error);
+      console.error(
+        "Database error creating video request from script:",
+        error
+      );
       throw error;
     }
   }
@@ -489,31 +555,31 @@ export class VideoGeneratorService {
     try {
       // Create a simplified payload for the database that matches mobile app structure
       const { data, error } = await supabase
-        .from('video_requests')
+        .from("video_requests")
         .insert({
           user_id: this.user.id,
-          render_status: 'queued',
+          render_status: "queued",
           selected_videos: payload.selectedVideos.map((v) => v.id),
           caption_config: (payload.captionConfig as any) || null,
           output_language: payload.outputLanguage || null,
           created_at: new Date().toISOString(),
         })
-        .select('id')
+        .select("id")
         .single();
 
       if (error || !data) {
         throw VideoValidationService.createError(
-          'Failed to create video request',
-          'DATABASE_ERROR',
+          "Failed to create video request",
+          "DATABASE_ERROR",
           { error: error?.message },
           true,
-          'Unable to queue video request. Please try again.'
+          "Unable to queue video request. Please try again."
         );
       }
 
       return data;
     } catch (error) {
-      console.error('Database error creating video request:', error);
+      console.error("Database error creating video request:", error);
       throw error;
     }
   }
@@ -538,14 +604,14 @@ export class VideoGeneratorService {
       } else if (status === VideoRequestStatus.COMPLETED) {
         updateData.completed_at = new Date().toISOString();
       } else if (status === VideoRequestStatus.FAILED && errorMessage) {
-        console.warn('Failed to update video request status:', errorMessage);
-        updateData.error_message = errorMessage || 'Unknown error';
+        console.warn("Failed to update video request status:", errorMessage);
+        updateData.error_message = errorMessage || "Unknown error";
       }
 
       const { error } = await supabase
-        .from('video_requests')
+        .from("video_requests")
         .update(updateData)
-        .eq('id', requestId);
+        .eq("id", requestId);
 
       if (error) {
         console.error(`Failed to update video request ${requestId}:`, error);
@@ -565,12 +631,12 @@ export class VideoGeneratorService {
   ): Promise<void> {
     try {
       const { error } = await supabase
-        .from('video_requests')
+        .from("video_requests")
         .update({
           script_id: scriptId,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', requestId);
+        .eq("id", requestId);
 
       if (error) {
         console.error(
@@ -601,14 +667,14 @@ export class VideoGeneratorService {
   ): Promise<void> {
     try {
       const { error } = await supabase
-        .from('video_requests')
+        .from("video_requests")
         .update({
           script_id: results.scriptId,
           render_id: results.renderId,
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', requestId);
+        .eq("id", requestId);
 
       if (error) {
         console.error(
@@ -626,89 +692,89 @@ export class VideoGeneratorService {
 
   // Placeholder methods - these need to be implemented based on the original logic
   private async generateAndSaveScript(
-    prompt: string,
+    script: string,
     systemPrompt: string,
     editorialProfile: EditorialProfile,
     outputLanguage: string,
     requestId: string
   ): Promise<{ scriptId: string; reviewedScript: string }> {
     try {
-      console.log('🤖 Generating script...');
-      const generatedScript = await this.scriptGenerator.generate(
-        prompt,
-        editorialProfile,
-        systemPrompt
-      );
-      console.log('✅ Script generated successfully');
+      console.log("🤖 Generating script...");
+      // const generatedScript = await this.scriptGenerator.generate(
+      //   prompt,
+      //   editorialProfile,
+      //   systemPrompt
+      // );
+      console.log("✅ Script generated successfully");
 
-      console.log('🔍 Reviewing script...');
-      const reviewedScript = await this.scriptReviewer.review(
-        generatedScript,
-        editorialProfile,
-        `System Prompt from the user:
-        ${systemPrompt}
+      console.log("🔍 Reviewing script...");
+      // const reviewedScript = await this.scriptReviewer.review(
+      //   script,
+      //   editorialProfile,
+      //   `System Prompt from the user:
+      //   ${systemPrompt}
 
-        User Prompt:
-        ${prompt}
-        
-        Output Language: ${outputLanguage}
-        `
-      );
-      console.log('✅ Script reviewed successfully');
+      //   User Prompt:
+      //   ${script}
 
-      console.log('💾 Creating script record...');
-      const { data: script, error: scriptError } = await supabase
-        .from('scripts')
+      //   Output Language: ${outputLanguage}
+      //   `
+      // );
+      console.log("✅ Script reviewed successfully");
+
+      console.log("💾 Creating script record...");
+      const { data: scriptRecord, error: scriptError } = await supabase
+        .from("scripts")
         .insert({
           user_id: this.user.id,
-          raw_prompt: prompt,
-          generated_script: reviewedScript,
-          status: 'validated',
+          raw_prompt: script,
+          generated_script: script,
+          status: "validated",
           output_language: outputLanguage,
         })
         .select()
         .single();
 
-      if (!script) {
+      if (!scriptRecord) {
         throw VideoValidationService.createError(
-          'Failed to save script to database',
-          'SCRIPT_SAVE_ERROR',
+          "Failed to save script to database",
+          "SCRIPT_SAVE_ERROR",
           { originalError: scriptError },
           true,
-          'Failed to save the generated script. Please try again.'
+          "Failed to save the generated script. Please try again."
         );
       }
 
       await supabase
-        .from('video_requests')
+        .from("video_requests")
         .update({
-          script_id: script.id,
+          script_id: scriptRecord.id,
         })
-        .eq('id', requestId);
+        .eq("id", requestId);
 
       if (scriptError) {
         throw VideoValidationService.createError(
-          'Failed to save script to database',
-          'SCRIPT_SAVE_ERROR',
+          "Failed to save script to database",
+          "SCRIPT_SAVE_ERROR",
           { originalError: scriptError },
           true,
-          'Failed to save the generated script. Please try again.'
+          "Failed to save the generated script. Please try again."
         );
       }
 
-      console.log(`✅ Script created: ${script.id}`);
-      return { scriptId: script.id, reviewedScript };
+      console.log(`✅ Script created: ${scriptRecord.id}`);
+      return { scriptId: scriptRecord.id, reviewedScript: script };
     } catch (error) {
-      if (error instanceof Error && 'code' in error) {
+      if (error instanceof Error && "code" in error) {
         throw error; // Re-throw VideoGenerationError
       }
 
       throw VideoValidationService.createError(
-        'Script generation failed',
-        'SCRIPT_GENERATION_ERROR',
+        "Script generation failed",
+        "SCRIPT_GENERATION_ERROR",
         { originalError: error },
         true,
-        'Failed to generate the video script. Please try again.'
+        "Failed to generate the video script. Please try again."
       );
     }
   }
@@ -717,66 +783,66 @@ export class VideoGeneratorService {
     selectedVideos: any[]
   ): Promise<ValidatedVideo[]> {
     try {
-      console.log('🔄 Fetching and validating videos...');
+      console.log("🔄 Fetching and validating videos...");
 
       if (!selectedVideos || selectedVideos.length === 0) {
-        throw new Error('No videos selected');
+        throw new Error("No videos selected");
       }
 
       // Extract video IDs from selected videos
       const videoIds = selectedVideos.map((video) => video.id).filter(Boolean);
 
       if (videoIds.length === 0) {
-        throw new Error('No valid video IDs found in selected videos');
+        throw new Error("No valid video IDs found in selected videos");
       }
 
       // Fetch videos from database
       const { data: videos, error: fetchError } = await supabase
-        .from('videos')
-        .select('id, title, description, upload_url, tags, user_id')
-        .in('id', videoIds)
-        .eq('user_id', this.user.id); // Ensure user owns these videos
+        .from("videos")
+        .select("id, title, description, upload_url, tags, user_id")
+        .in("id", videoIds)
+        .eq("user_id", this.user.id); // Ensure user owns these videos
 
       if (fetchError) {
-        console.error('❌ Failed to fetch videos:', fetchError);
+        console.error("❌ Failed to fetch videos:", fetchError);
         throw new Error(`Failed to fetch videos: ${fetchError.message}`);
       }
 
       if (!videos || videos.length === 0) {
         throw new Error(
-          'No accessible videos found. Please ensure videos are uploaded and processing is complete.'
+          "No accessible videos found. Please ensure videos are uploaded and processing is complete."
         );
       }
 
       // Validate and transform videos using the validation service
       const validatedVideos: ValidatedVideo[] = videos.map((video) => ({
         id: video.id,
-        url: video.upload_url || '' ,
+        url: video.upload_url || "",
         title: video.title,
-        description: video.description || '',
+        description: video.description || "",
         tags: video.tags || [],
       }));
 
       if (validatedVideos.length === 0) {
-        throw new Error('No valid videos found after validation');
+        throw new Error("No valid videos found after validation");
       }
 
       console.log(`✅ Validated ${validatedVideos.length} videos`);
 
       return validatedVideos;
     } catch (error) {
-      console.error('❌ Video fetching and validation failed:', error);
+      console.error("❌ Video fetching and validation failed:", error);
       throw VideoValidationService.createError(
         `Video validation failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
+          error instanceof Error ? error.message : "Unknown error"
         }`,
-        'VIDEO_VALIDATION_FAILED',
+        "VIDEO_VALIDATION_FAILED",
         {
           userId: this.user.id,
           selectedVideoCount: selectedVideos?.length || 0,
         },
         true,
-        'Failed to validate selected videos. Please check your video selections.'
+        "Failed to validate selected videos. Please check your video selections."
       );
     }
   }
@@ -786,11 +852,12 @@ export class VideoGeneratorService {
     validatedVideos: ValidatedVideo[],
     voiceId: string,
     editorialProfile: EditorialProfile,
-    captionConfig?: any,
-    outputLanguage?: string
+    captionConfig: CaptionConfiguration,
+    outputLanguage: string,
+    logger: winston.Logger
   ): Promise<any> {
     try {
-      console.log('🔄 Generating Creatomate template...');
+      logger.info("🔄 Generating Creatomate template...");
 
       // Transform validated videos for CreatomateBuilder
       const selectedVideos = validatedVideos.map((video) => ({
@@ -803,26 +870,29 @@ export class VideoGeneratorService {
 
       // Get the creatomate-builder-agent prompt from the prompt bank
       const promptTemplate = PromptService.fillPromptTemplate(
-        'video-creatomate-agent-v2',
+        "video-creatomate-agent-v2",
         {
           script,
-          scenePlan: 'Will be generated by the builder',
+          scenePlan: "Will be generated by the builder",
           voiceId,
-          outputLanguage: outputLanguage || 'en',
+          outputLanguage: outputLanguage || "en",
           captionInfo: captionConfig
             ? `Caption Config: ${JSON.stringify(captionConfig)}`
-            : '',
+            : "",
         }
       );
 
       // Convert caption configuration to Creatomate format
-      console.log(
-        '🚧 VideoGenerator: Converting caption config:',
+      logger.info(
+        "🚧 VideoGenerator: Converting caption config:",
         JSON.stringify(captionConfig, null, 2)
       );
-      const captionStructure = convertCaptionConfigToProperties(captionConfig);
-      console.log(
-        '🚧 VideoGenerator: Caption structure after conversion:',
+      const captionStructure = convertCaptionConfigToProperties(
+        captionConfig,
+        logger
+      );
+      logger.info(
+        "🚧 VideoGenerator: Caption structure after conversion:",
         JSON.stringify(captionStructure, null, 2)
       );
 
@@ -836,19 +906,19 @@ export class VideoGeneratorService {
         agentPrompt: promptTemplate?.system,
       });
 
-      console.log('✅ Creatomate template generated successfully');
+      logger.info("✅ Creatomate template generated successfully");
 
       return template;
     } catch (error) {
-      console.error('❌ Template generation failed:', error);
+      logger.error("❌ Template generation failed:", error);
       throw VideoValidationService.createError(
         `Template generation failed: ${
-          error instanceof Error ? error.message : 'Unknown error'
+          error instanceof Error ? error.message : "Unknown error"
         }`,
-        'TEMPLATE_GENERATION_FAILED',
+        "TEMPLATE_GENERATION_FAILED",
         { userId: this.user.id, videoCount: validatedVideos.length },
         true,
-        'Failed to generate video template. Please try again.'
+        "Failed to generate video template. Please try again."
       );
     }
   }
@@ -860,7 +930,7 @@ export class VideoGeneratorService {
     videoRequestId: string
   ): Promise<void> {
     try {
-      console.log('🔄 Storing training data...');
+      console.log("🔄 Storing training data...");
 
       // Store training data for ML improvements
       const trainingData = {
@@ -873,19 +943,19 @@ export class VideoGeneratorService {
       };
 
       const { error: trainingError } = await supabase
-        .from('rl_training_data')
+        .from("rl_training_data")
         .insert(trainingData);
 
       if (trainingError) {
         // Don't throw here - training data storage is optional and shouldn't break the main flow
-        console.warn('⚠️ Failed to store training data:', trainingError);
+        console.warn("⚠️ Failed to store training data:", trainingError);
         return;
       }
 
-      console.log('✅ Training data stored successfully');
+      console.log("✅ Training data stored successfully");
     } catch (error) {
       // Training data storage is non-critical, so we just log and continue
-      console.warn('⚠️ Error storing training data:', error);
+      console.warn("⚠️ Error storing training data:", error);
     }
   }
 
@@ -896,17 +966,17 @@ export class VideoGeneratorService {
     prompt: string
   ): Promise<string> {
     try {
-      console.log('🚀 Starting Creatomate render...');
+      console.log("🚀 Starting Creatomate render...");
 
       // Get the server's base URL for webhook callbacks
-      const baseUrl = 'https://nodejs-production-a774.up.railway.app';
+      const baseUrl = "https://nodejs-production-a774.up.railway.app";
       const webhookUrl = `${baseUrl}/api/webhooks/creatomate`;
 
       const renderPayload = {
-        template_id: 'a5403674-6eaf-4114-a088-4d560d851aef',
+        template_id: "a5403674-6eaf-4114-a088-4d560d851aef",
         modifications: template,
         webhook_url: webhookUrl,
-        output_format: 'mp4',
+        output_format: "mp4",
         frame_rate: 30,
         render_scale: 1.0,
         metadata: JSON.stringify({
@@ -919,12 +989,12 @@ export class VideoGeneratorService {
       };
 
       const renderResponse = await fetch(
-        'https://api.creatomate.com/v1/renders',
+        "https://api.creatomate.com/v1/renders",
         {
-          method: 'POST',
+          method: "POST",
           headers: {
             Authorization: `Bearer ${process.env.CREATOMATE_API_KEY}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(renderPayload),
         }
@@ -934,15 +1004,15 @@ export class VideoGeneratorService {
         const errorData = await renderResponse.json().catch(() => ({}));
 
         throw VideoValidationService.createError(
-          'Creatomate API request failed',
-          'CREATOMATE_API_ERROR',
+          "Creatomate API request failed",
+          "CREATOMATE_API_ERROR",
           {
             status: renderResponse.status,
             statusText: renderResponse.statusText,
             errorData,
           },
           renderResponse.status >= 500, // Retry on server errors
-          'Video rendering service is temporarily unavailable. Please try again.'
+          "Video rendering service is temporarily unavailable. Please try again."
         );
       }
 
@@ -951,27 +1021,27 @@ export class VideoGeneratorService {
 
       if (!renderId) {
         throw VideoValidationService.createError(
-          'Invalid response from Creatomate API',
-          'CREATOMATE_INVALID_RESPONSE',
+          "Invalid response from Creatomate API",
+          "CREATOMATE_INVALID_RESPONSE",
           { renderData },
           true,
-          'Video rendering service returned an invalid response. Please try again.'
+          "Video rendering service returned an invalid response. Please try again."
         );
       }
 
       console.log(`✅ Render started: ${renderId}`);
       return renderId;
     } catch (error) {
-      if (error instanceof Error && 'code' in error) {
+      if (error instanceof Error && "code" in error) {
         throw error;
       }
 
       throw VideoValidationService.createError(
-        'Failed to start render',
-        'RENDER_START_ERROR',
+        "Failed to start render",
+        "RENDER_START_ERROR",
         { originalError: error },
         true,
-        'Failed to start video rendering. Please try again.'
+        "Failed to start video rendering. Please try again."
       );
     }
   }
@@ -980,7 +1050,7 @@ export class VideoGeneratorService {
     scriptId: string | null,
     videoRequestId: string | null
   ): Promise<void> {
-    console.log('🧹 Cleaning up after failure...');
+    console.log("🧹 Cleaning up after failure...");
     // TODO: Implement cleanup logic
   }
 }

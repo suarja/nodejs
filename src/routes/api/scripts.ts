@@ -9,7 +9,19 @@ import {
 } from "../../utils/api/responses";
 import { VideoGeneratorService } from "../../services/video/generator";
 import { VideoValidationService } from "../../services/video/validation";
+import { logger } from "../../config/logger";
+import { z } from "zod";
+import { stat } from "fs";
+import {
+  CaptionConfigurationSchema,
+  EditorialProfileSchema,
+} from "../../types/video";
+import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
+import { ResourceType } from "../../types/ressource";
 
+const scriptsLogger = logger.child({
+  service: "scripts",
+});
 /**
  * Determines the appropriate HTTP status code based on error type
  * (Copied from videos.ts for consistency)
@@ -64,7 +76,7 @@ function determineErrorStatusCode(error: any): number {
  * Fetch all script drafts for authenticated user
  */
 export async function getScriptDraftsHandler(req: Request, res: Response) {
-  console.log("📋 Fetching script drafts...");
+  scriptsLogger.info("📋 Fetching script drafts...");
 
   try {
     // Authenticate user
@@ -111,7 +123,7 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
     } = await query.range((page - 1) * limit, page * limit - 1);
 
     if (error) {
-      console.error("❌ Error fetching script drafts:", error);
+      scriptsLogger.error("❌ Error fetching script drafts:", error);
       return errorResponseExpress(
         res,
         "Failed to fetch script drafts",
@@ -119,7 +131,7 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
       );
     }
 
-    console.log(
+    scriptsLogger.info(
       `✅ Found ${scripts?.length || 0} script drafts for user ${user!.id}`
     );
 
@@ -131,7 +143,7 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
       limit,
     });
   } catch (error) {
-    console.error("❌ Script drafts fetch error:", error);
+    scriptsLogger.error("❌ Script drafts fetch error:", error);
     return errorResponseExpress(
       res,
       "Internal server error",
@@ -145,7 +157,7 @@ export async function getScriptDraftsHandler(req: Request, res: Response) {
  * Fetch specific script draft with conversation history
  */
 export async function getScriptDraftHandler(req: Request, res: Response) {
-  console.log("📄 Fetching script draft details...");
+  scriptsLogger.info("📄 Fetching script draft details...");
 
   try {
     // Authenticate user
@@ -174,7 +186,7 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
       .single();
 
     if (error || !scriptDraft) {
-      console.error("❌ Script draft not found:", error);
+      scriptsLogger.error("❌ Script draft not found:", error);
       return errorResponseExpress(
         res,
         "Script draft not found",
@@ -182,8 +194,8 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
       );
     }
 
-    console.log(`✅ Script draft found: ${scriptDraft.id}`);
-    console.log(
+    scriptsLogger.info(`✅ Script draft found: ${scriptDraft.id}`);
+    scriptsLogger.info(
       `📄 Current script length: ${
         scriptDraft.current_script?.length || 0
       } chars`
@@ -191,7 +203,7 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
 
     return successResponseExpress(res, scriptDraft);
   } catch (error) {
-    console.error("❌ Script draft fetch error:", error);
+    scriptsLogger.error("❌ Script draft fetch error:", error);
     return errorResponseExpress(
       res,
       "Internal server error",
@@ -205,7 +217,7 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
  * Send message in script conversation (with streaming support)
  */
 export async function scriptChatHandler(req: Request, res: Response) {
-  console.log("💬 Processing script chat message...");
+  scriptsLogger.info("💬 Processing script chat message...");
 
   try {
     // Authenticate user
@@ -250,7 +262,7 @@ export async function scriptChatHandler(req: Request, res: Response) {
       return successResponseExpress(res, result);
     }
   } catch (error) {
-    console.error("❌ Script chat error:", error);
+    scriptsLogger.error("❌ Script chat error:", error);
     return errorResponseExpress(
       res,
       "Failed to process chat message",
@@ -264,7 +276,7 @@ export async function scriptChatHandler(req: Request, res: Response) {
  * Validate and finalize a script draft
  */
 export async function validateScriptHandler(req: Request, res: Response) {
-  console.log("✅ Validating script draft...");
+  scriptsLogger.info("✅ Validating script draft...");
 
   try {
     // Authenticate user
@@ -310,7 +322,7 @@ export async function validateScriptHandler(req: Request, res: Response) {
       script: scriptDraft,
     });
   } catch (error) {
-    console.error("❌ Script validation error:", error);
+    scriptsLogger.error("❌ Script validation error:", error);
     return errorResponseExpress(
       res,
       "Failed to validate script",
@@ -324,7 +336,7 @@ export async function validateScriptHandler(req: Request, res: Response) {
  * Delete a script draft
  */
 export async function deleteScriptDraftHandler(req: Request, res: Response) {
-  console.log("🗑️ Deleting script draft...");
+  scriptsLogger.info("🗑️ Deleting script draft...");
 
   try {
     // Authenticate user
@@ -353,7 +365,7 @@ export async function deleteScriptDraftHandler(req: Request, res: Response) {
       .eq("user_id", user!.id);
 
     if (error) {
-      console.error("❌ Error deleting script draft:", error);
+      scriptsLogger.error("❌ Error deleting script draft:", error);
       return errorResponseExpress(
         res,
         "Failed to delete script draft",
@@ -365,7 +377,7 @@ export async function deleteScriptDraftHandler(req: Request, res: Response) {
       message: "Script draft deleted successfully",
     });
   } catch (error) {
-    console.error("❌ Script deletion error:", error);
+    scriptsLogger.error("❌ Script deletion error:", error);
     return errorResponseExpress(
       res,
       "Failed to delete script draft",
@@ -379,7 +391,7 @@ export async function deleteScriptDraftHandler(req: Request, res: Response) {
  * Duplicate an existing script draft
  */
 export async function duplicateScriptDraftHandler(req: Request, res: Response) {
-  console.log("📋 Duplicating script draft...");
+  scriptsLogger.info("📋 Duplicating script draft...");
 
   try {
     // Authenticate user
@@ -435,7 +447,7 @@ export async function duplicateScriptDraftHandler(req: Request, res: Response) {
       .single();
 
     if (createError || !duplicatedScript) {
-      console.error("❌ Error duplicating script:", createError);
+      scriptsLogger.error("❌ Error duplicating script:", createError);
       return errorResponseExpress(
         res,
         "Failed to duplicate script draft",
@@ -448,7 +460,7 @@ export async function duplicateScriptDraftHandler(req: Request, res: Response) {
       script: duplicatedScript,
     });
   } catch (error) {
-    console.error("❌ Script duplication error:", error);
+    scriptsLogger.error("❌ Script duplication error:", error);
     return errorResponseExpress(
       res,
       "Failed to duplicate script draft",
@@ -465,20 +477,67 @@ export async function generateVideoFromScriptHandler(
   req: Request,
   res: Response
 ) {
-  console.log("🎬 Starting video generation from script...");
-
   try {
+    const RequestParamsSchema = z.object({
+      id: z.string(),
+    });
+
+    const RequestBodySchema = z.object({
+      selectedVideos: z.array(z.string()),
+      voiceId: z.string().optional(),
+      captionConfig: CaptionConfigurationSchema,
+      editorialProfile: EditorialProfileSchema,
+      outputLanguage: z.string(),
+      script: z.string(),
+      systemPrompt: z.string(),
+    });
+
+    const { success: successParams, data: dataParams } =
+      RequestParamsSchema.safeParse(req.params);
+
+    const { success: successBody, data: dataBody } =
+      RequestBodySchema.safeParse(req.body);
+
+    if (!successParams || !successBody) {
+      return errorResponseExpress(
+        res,
+        "Invalid request parameters",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const { id: scriptId } = dataParams;
+    const {
+      selectedVideos,
+      voiceId,
+      captionConfig,
+      outputLanguage,
+      script,
+      systemPrompt,
+      editorialProfile,
+    } = dataBody;
     // Authenticate user
     const authHeader = req.headers.authorization;
     const { user, errorResponse: authError } =
       await ClerkAuthService.verifyUser(authHeader);
 
+    const generateVideoFromScriptHandlerLogger = scriptsLogger.child({
+      userId: user?.id,
+      scriptId: scriptId,
+      voiceId: voiceId,
+      outputLanguage: outputLanguage,
+      selectedVideos: selectedVideos,
+    });
+
     if (authError) {
+      generateVideoFromScriptHandlerLogger.error(
+        "❌ Error authenticating user:",
+        authError
+      );
       return errorResponseExpress(res, authError.error, authError.status);
     }
 
-    const { id: scriptId } = req.params;
     if (!scriptId) {
+      generateVideoFromScriptHandlerLogger.error("❌ Script ID is required");
       return errorResponseExpress(
         res,
         "Script ID is required",
@@ -494,6 +553,10 @@ export async function generateVideoFromScriptHandler(
       .single();
 
     if (scriptError || !scriptDraft) {
+      generateVideoFromScriptHandlerLogger.error(
+        "❌ Script draft not found",
+        scriptError
+      );
       return errorResponseExpress(
         res,
         "Script draft not found",
@@ -502,6 +565,9 @@ export async function generateVideoFromScriptHandler(
     }
 
     if (!scriptDraft.current_script?.trim()) {
+      generateVideoFromScriptHandlerLogger.error(
+        "❌ Script is empty - cannot generate video"
+      );
       return errorResponseExpress(
         res,
         "Script is empty - cannot generate video",
@@ -510,26 +576,26 @@ export async function generateVideoFromScriptHandler(
     }
 
     // Parse video generation request body
-    const requestBody = req.body;
 
     // Create payload for video generation (copying from existing endpoint)
     const videoPayload = {
-      prompt: scriptDraft.current_script, // Use script as prompt
-      systemPrompt: "Generate video from provided script", // Simple system prompt
-      selectedVideos: requestBody.selectedVideos || [],
-      voiceId: requestBody.voiceId,
-      captionConfig: requestBody.captionConfig,
-      outputLanguage: scriptDraft.output_language || "fr",
-      editorialProfile: await getEditorialProfileForScript(
-        user!.id,
-        scriptDraft.editorial_profile_id || undefined 
-      ),
+      prompt: scriptDraft.current_script,
+      systemPrompt: systemPrompt,
+      selectedVideos: selectedVideos,
+      voiceId: voiceId,
+      captionConfig: captionConfig,
+      outputLanguage: outputLanguage,
+      editorialProfile: editorialProfile,
     };
 
     // Validate video generation payload (reusing existing validation)
     const validationResult =
       VideoValidationService.validateRequest(videoPayload);
     if (!validationResult.success) {
+      generateVideoFromScriptHandlerLogger.error(
+        "❌ Video generation payload validation failed",
+        validationResult.error
+      );
       return errorResponseExpress(
         res,
         validationResult.error.message,
@@ -542,10 +608,14 @@ export async function generateVideoFromScriptHandler(
     const videoGenerator = new VideoGeneratorService(user!);
     const result = await videoGenerator.generateVideoFromScript(
       scriptDraft,
-      validationResult.payload
+      validationResult.payload,
+      generateVideoFromScriptHandlerLogger
     );
+    await incrementResourceUsage(user!.id, ResourceType.VIDEOS_GENERATED);
 
-    console.log("✅ Video generation from script initiated successfully");
+    generateVideoFromScriptHandlerLogger.info(
+      "✅ Video generation from script initiated successfully"
+    );
 
     return successResponseExpress(res, {
       requestId: result.requestId,
@@ -554,10 +624,13 @@ export async function generateVideoFromScriptHandler(
       estimatedCompletionTime: result.estimatedCompletionTime,
     });
   } catch (error: any) {
-    console.error("❌ Video generation from script error:", error);
-
     // Use same error handling pattern as original endpoint
     const statusCode = determineErrorStatusCode(error);
+    scriptsLogger.error(
+      "❌ Video generation from script error:",
+      statusCode,
+      error
+    );
 
     return errorResponseExpress(
       res,
