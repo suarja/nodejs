@@ -1,3 +1,6 @@
+import winston from "winston";
+import { CaptionConfiguration } from "../../types/video";
+
 /**
  * Video preset configuration type
  */
@@ -29,15 +32,15 @@ interface VideoPreset {
 interface CaptionConfig {
   enabled: boolean;
   presetId?: string;
-  placement?: 'top' | 'center' | 'bottom';
+  placement?: "top" | "center" | "bottom";
   transcriptColor?: string;
   transcriptEffect?:
-    | 'karaoke'
-    | 'highlight'
-    | 'fade'
-    | 'bounce'
-    | 'slide'
-    | 'enlarge';
+    | "karaoke"
+    | "highlight"
+    | "fade"
+    | "bounce"
+    | "slide"
+    | "enlarge";
 }
 
 /**
@@ -45,151 +48,151 @@ interface CaptionConfig {
  */
 const VIDEO_PRESETS: VideoPreset[] = [
   {
-    id: 'karaoke',
-    name: 'Karaoke',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'karaoke',
-    transcript_placement: 'animate',
-    transcript_color: '#04f827',
+    id: "karaoke",
+    name: "Karaoke",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "karaoke",
+    transcript_placement: "animate",
+    transcript_color: "#04f827",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'beasty',
-    name: 'Beasty',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'highlight',
-    transcript_placement: 'animate',
-    transcript_color: '#FFFD03',
+    id: "beasty",
+    name: "Beasty",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "highlight",
+    transcript_placement: "animate",
+    transcript_color: "#FFFD03",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'highlight-yellow',
-    name: 'Highlight Yellow',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'highlight',
-    transcript_placement: 'animate',
-    transcript_color: '#FFE500',
+    id: "highlight-yellow",
+    name: "Highlight Yellow",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "highlight",
+    transcript_placement: "animate",
+    transcript_color: "#FFE500",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'fade',
-    name: 'Fade',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'fade',
-    transcript_placement: 'animate',
-    transcript_color: '#ffffff',
+    id: "fade",
+    name: "Fade",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "fade",
+    transcript_placement: "animate",
+    transcript_color: "#ffffff",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'bounce',
-    name: 'Bounce',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'bounce',
-    transcript_placement: 'animate',
-    transcript_color: '#ff4081',
+    id: "bounce",
+    name: "Bounce",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "bounce",
+    transcript_placement: "animate",
+    transcript_color: "#ff4081",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'slide',
-    name: 'Slide',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'slide',
-    transcript_placement: 'animate',
-    transcript_color: '#00bcd4',
+    id: "slide",
+    name: "Slide",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "slide",
+    transcript_placement: "animate",
+    transcript_color: "#00bcd4",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
   {
-    id: 'enlarge',
-    name: 'Enlarge',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    background_border_radius: '28%',
-    transcript_effect: 'enlarge',
-    transcript_placement: 'animate',
-    transcript_color: '#9c27b0',
+    id: "enlarge",
+    name: "Enlarge",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    background_border_radius: "28%",
+    transcript_effect: "enlarge",
+    transcript_placement: "animate",
+    transcript_color: "#9c27b0",
     transcript_maximum_length: 25,
-    width: '90%',
-    height: '100%',
-    placement: 'bottom',
+    width: "90%",
+    height: "100%",
+    placement: "bottom",
   },
 ];
 
@@ -200,13 +203,13 @@ const VIDEO_PRESETS: VideoPreset[] = [
  */
 function mapPlacementToYAlignment(placement: string): string {
   switch (placement) {
-    case 'top':
-      return '10%';
-    case 'center':
-      return '50%';
-    case 'bottom':
+    case "top":
+      return "10%";
+    case "center":
+      return "50%";
+    case "bottom":
     default:
-      return '90%';
+      return "90%";
   }
 }
 
@@ -216,52 +219,53 @@ function mapPlacementToYAlignment(placement: string): string {
  * @returns Properties to apply to Creatomate text elements
  */
 export function convertCaptionConfigToProperties(
-  config: CaptionConfig | null | undefined
+  config: CaptionConfiguration | null | undefined,
+  logger: winston.Logger
 ): Record<string, any> {
-  console.log(
-    '🚧 convertCaptionConfigToProperties called with config:',
+  logger.info(
+    "🚧 convertCaptionConfigToProperties called with config:",
     JSON.stringify(config, null, 2)
   );
 
   // If no config provided, return default settings
   if (!config) {
-    console.log('🚧 No config provided, returning default settings 🚧');
+    logger.info("🚧 No config provided, returning default settings 🚧");
     return getDefaultCaptionProperties();
   }
 
   // If captions are disabled, return empty object (will be handled by disableCaptions method)
   if (config.enabled === false) {
-    console.log('🚧 Captions are disabled, returning empty object 🚧');
+    logger.info("🚧 Captions are disabled, returning empty object 🚧");
     return {};
   }
 
   // Build properties directly from the config values
   const properties = {
     // Base layout properties
-    width: '90%',
-    height: '100%',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    x_alignment: '50%',
-    y_alignment: mapPlacementToYAlignment(config.placement || 'bottom'),
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    transcript_placement: 'animate',
-    background_border_radius: '28%',
+    width: "90%",
+    height: "100%",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    font_family: "Montserrat",
+    font_weight: "700",
+    x_alignment: "50%",
+    y_alignment: mapPlacementToYAlignment(config.placement || "bottom"),
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    transcript_placement: "animate",
+    background_border_radius: "28%",
     transcript_maximum_length: 25,
 
     // User-specified properties
-    transcript_color: config.transcriptColor || '#04f827',
-    transcript_effect: config.transcriptEffect || 'karaoke',
+    transcript_color: config.transcriptColor || "#04f827",
+    transcript_effect: config.transcriptEffect || "karaoke",
   };
 
-  console.log(
-    '🚧 Final caption properties result:',
+  logger.info(
+    "🚧 Final caption properties result:",
     JSON.stringify(properties, null, 2)
   );
   return properties;
@@ -271,25 +275,25 @@ export function convertCaptionConfigToProperties(
  * Get default caption properties (fallback when no config provided)
  */
 function getDefaultCaptionProperties(): Record<string, any> {
-  console.log('🚧 getDefaultCaptionProperties 🚧');
+  console.log("🚧 getDefaultCaptionProperties 🚧");
   return {
-    width: '90%',
-    height: '100%',
-    font_size: '8 vmin',
-    fill_color: '#ffffff',
-    font_family: 'Montserrat',
-    font_weight: '700',
-    x_alignment: '50%',
-    y_alignment: '90%',
-    stroke_color: '#333333',
-    stroke_width: '1.05 vmin',
-    background_color: 'rgba(216,216,216,0)',
-    transcript_color: '#04f827',
-    transcript_effect: 'karaoke',
-    background_x_padding: '26%',
-    background_y_padding: '7%',
-    transcript_placement: 'animate',
-    background_border_radius: '28%',
+    width: "90%",
+    height: "100%",
+    font_size: "8 vmin",
+    fill_color: "#ffffff",
+    font_family: "Montserrat",
+    font_weight: "700",
+    x_alignment: "50%",
+    y_alignment: "90%",
+    stroke_color: "#333333",
+    stroke_width: "1.05 vmin",
+    background_color: "rgba(216,216,216,0)",
+    transcript_color: "#04f827",
+    transcript_effect: "karaoke",
+    background_x_padding: "26%",
+    background_y_padding: "7%",
+    transcript_placement: "animate",
+    background_border_radius: "28%",
     transcript_maximum_length: 25,
   };
 }
@@ -298,14 +302,14 @@ function getDefaultCaptionProperties(): Record<string, any> {
  * Get available transcript effects
  */
 export function getAvailableTranscriptEffects(): string[] {
-  console.log('🚧 getAvailableTranscriptEffects 🚧');
-  return ['karaoke', 'highlight', 'fade', 'bounce', 'slide', 'enlarge'];
+  console.log("🚧 getAvailableTranscriptEffects 🚧");
+  return ["karaoke", "highlight", "fade", "bounce", "slide", "enlarge"];
 }
 
 /**
  * Check if a transcript effect is valid
  */
 export function isValidTranscriptEffect(effect: string): boolean {
-  console.log('🚧 isValidTranscriptEffect 🚧');
+  console.log("🚧 isValidTranscriptEffect 🚧");
   return getAvailableTranscriptEffects().includes(effect);
 }

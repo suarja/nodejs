@@ -1,9 +1,10 @@
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import OpenAI from 'openai';
-import { createOpenAIClient } from '../config/openai';
-import { PromptService } from './promptService';
-import { convertCaptionConfigToProperties } from '../utils/video/preset-converter';
+import { readFile } from "fs/promises";
+import { join } from "path";
+import OpenAI from "openai";
+import { createOpenAIClient } from "../config/openai";
+import { PromptService } from "./promptService";
+import { convertCaptionConfigToProperties } from "../utils/video/preset-converter";
+import { logger } from "../config/logger";
 
 export class CreatomateBuilder {
   private static instance: CreatomateBuilder;
@@ -29,12 +30,12 @@ export class CreatomateBuilder {
     }
 
     try {
-      const docsPath = join(process.cwd(), 'docs', 'creatomate.md');
-      this.docsCache = await readFile(docsPath, 'utf-8');
+      const docsPath = join(process.cwd(), "docs", "creatomate.md");
+      this.docsCache = await readFile(docsPath, "utf-8");
       return this.docsCache;
     } catch (error) {
-      console.error('Error loading Creatomate docs:', error);
-      throw new Error('Failed to load Creatomate documentation');
+      console.error("Error loading Creatomate docs:", error);
+      throw new Error("Failed to load Creatomate documentation");
     }
   }
 
@@ -46,7 +47,7 @@ export class CreatomateBuilder {
       model: this.model,
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: `You are a video planning expert. Your PRIMARY GOAL is to create a scene-by-scene plan that ALWAYS uses the available video assets.
 
 CRITICAL RULES:
@@ -85,7 +86,7 @@ OUTPUT FORMAT:
 CRITICAL: The video_asset.url MUST be the exact URL from the available videos list.`,
         },
         {
-          role: 'user',
+          role: "user",
           content: `Script: ${script}
 
 Available videos: ${JSON.stringify(selectedVideos, null, 2)}
@@ -93,11 +94,11 @@ Available videos: ${JSON.stringify(selectedVideos, null, 2)}
 REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset as null.`,
         },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
     });
 
-    console.log('Planning completion:', completion.choices[0]?.message.content);
-    return JSON.parse(completion.choices[0]?.message.content || '{}');
+    console.log("Planning completion:", completion.choices[0]?.message.content);
+    return JSON.parse(completion.choices[0]?.message.content || "{}");
   }
 
   private async generateTemplate(params: {
@@ -113,12 +114,12 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
 
     // Use the provided system prompt or get from prompt bank
     let systemPrompt = params.agentPrompt;
-    let userPrompt = '';
+    let userPrompt = "";
 
     if (!systemPrompt) {
       // Get the creatomate-builder-agent prompt from the prompt bank
       const promptTemplate = PromptService.fillPromptTemplate(
-        'creatomate-builder-agent',
+        "creatomate-builder-agent",
         {
           script: params.script,
           scenePlan: JSON.stringify(params.scenePlan, null, 2),
@@ -129,12 +130,12 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
                 null,
                 2
               )}`
-            : '',
+            : "",
         }
       );
 
       if (!promptTemplate) {
-        console.warn('Prompt template not found, using default system prompt');
+        console.warn("Prompt template not found, using default system prompt");
         systemPrompt = `
 Tu es un expert en génération de vidéos avec Creatomate via JSON.
 
@@ -163,7 +164,7 @@ ${
         null,
         2
       )}`
-    : ''
+    : ""
 }
 
 Documentation Creatomate:
@@ -175,7 +176,7 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
         userPrompt = promptTemplate.user;
 
         // Add documentation if not already included in the prompt
-        if (!userPrompt.includes('Documentation Creatomate')) {
+        if (!userPrompt.includes("Documentation Creatomate")) {
           userPrompt += `\n\nDocumentation Creatomate:\n${docs}`;
         }
       }
@@ -194,7 +195,7 @@ ${
         null,
         2
       )}`
-    : ''
+    : ""
 }
 
 Documentation Creatomate:
@@ -207,18 +208,18 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       model: this.model,
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: systemPrompt,
         },
         {
-          role: 'user',
+          role: "user",
           content: userPrompt,
         },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
     });
 
-    return JSON.parse(completion.choices[0]?.message.content || '{}');
+    return JSON.parse(completion.choices[0]?.message.content || "{}");
   }
 
   /**
@@ -232,11 +233,11 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     captionStructure?: any;
     agentPrompt?: string;
   }): Promise<any> {
-    console.log('🚧 CreatomateBuilder.buildJson called with params:');
-    console.log('Voice ID:', params.voiceId);
-    console.log('Caption structure type:', typeof params.captionStructure);
+    console.log("🚧 CreatomateBuilder.buildJson called with params:");
+    console.log("Voice ID:", params.voiceId);
+    console.log("Caption structure type:", typeof params.captionStructure);
     console.log(
-      'Caption structure content:',
+      "Caption structure content:",
       JSON.stringify(params.captionStructure, null, 2)
     );
 
@@ -250,7 +251,7 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     const template = await this.generateTemplate({
       script: params.script,
       selectedVideos: params.selectedVideos,
-      voiceId: params.voiceId || 'NFcw9p0jKu3zbmXieNPE', // Default voice if not provided
+      voiceId: params.voiceId || "NFcw9p0jKu3zbmXieNPE", // Default voice if not provided
       editorialProfile: params.editorialProfile,
       scenePlan,
       captionStructure: params.captionStructure,
@@ -277,20 +278,20 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       !template.height ||
       !template.elements
     ) {
-      throw new Error('Invalid template: Missing required properties');
+      throw new Error("Invalid template: Missing required properties");
     }
 
     // Validate dimensions for TikTok format
     if (template.width !== 1080 || template.height !== 1920) {
-      throw new Error('Invalid template: Must be 1080x1920 for vertical video');
+      throw new Error("Invalid template: Must be 1080x1920 for vertical video");
     }
 
     // Validate scenes
     if (!Array.isArray(template.elements)) {
-      throw new Error('Invalid template: elements must be an array');
+      throw new Error("Invalid template: elements must be an array");
     }
 
-    console.log('✅ Template validation passed');
+    console.log("✅ Template validation passed");
   }
 
   /* A function to post process the template to fix the elements. Exactly the video.fit:
@@ -305,12 +306,14 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
     // Fix the elements.video.fit to be cover and duration to be null
     template.elements.forEach((element: any) => {
       element.elements.forEach((element: any) => {
-        if (element.type === 'video') {
-          console.log('🚧 Fixing video.fit to cover 🚧');
-          element.fit = 'cover';
-          
+        if (element.type === "video") {
+          console.log("🚧 Fixing video.fit to cover 🚧");
+          element.fit = "cover";
+
           // Ensure video duration is null to limit video to caption/voiceover length
-          console.log('🚧 Setting video.duration to null for TikTok optimization 🚧');
+          console.log(
+            "🚧 Setting video.duration to null for TikTok optimization 🚧"
+          );
           element.duration = null;
         }
       });
@@ -323,17 +326,17 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
   private handleCaptionConfiguration(template: any, captionConfig: any) {
     // If no caption config provided, apply default configuration
     console.log(
-      '🚧 handleCaptionConfiguration called with captionConfig:',
+      "🚧 handleCaptionConfiguration called with captionConfig:",
       JSON.stringify(captionConfig, null, 2)
     );
     if (!captionConfig) {
-      console.log('🚧 No caption configuration provided, using default 🚧');
+      console.log("🚧 No caption configuration provided, using default 🚧");
       const defaultConfig = {
         enabled: true,
-        presetId: 'karaoke',
-        placement: 'bottom',
-        transcriptColor: '#04f827',
-        transcriptEffect: 'karaoke',
+        presetId: "karaoke",
+        placement: "bottom",
+        transcriptColor: "#04f827",
+        transcriptEffect: "karaoke",
       };
       this.fixCaptions(template, defaultConfig);
       return;
@@ -342,14 +345,14 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
     // Check if captions are disabled
     if (captionConfig.enabled === false) {
       console.log(
-        '🚧 Captions are disabled, removing all subtitle elements 🚧'
+        "🚧 Captions are disabled, removing all subtitle elements 🚧"
       );
       this.disableCaptions(template);
       return;
     }
 
     // Apply caption configuration
-    console.log('🚧 Applying caption configuration to template 🚧');
+    console.log("🚧 Applying caption configuration to template 🚧");
     this.fixCaptions(template, captionConfig);
   }
 
@@ -357,14 +360,14 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
    * Remove all caption elements from the template
    */
   private disableCaptions(template: any) {
-    console.log('Disabling captions - removing all subtitle elements');
+    console.log("Disabling captions - removing all subtitle elements");
 
     template.elements.forEach((scene: any) => {
       scene.elements = scene.elements.filter((element: any) => {
         const isSubtitle =
-          element.type === 'text' &&
+          element.type === "text" &&
           element.name &&
-          element.name.toLowerCase().includes('subtitle');
+          element.name.toLowerCase().includes("subtitle");
 
         if (isSubtitle) {
           console.log(`Removing subtitle element: ${element.name}`);
@@ -376,12 +379,15 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
   }
 
   private fixCaptions(template: any, captionConfig: any) {
-    console.log('🚧 Fixing captions with direct config approach 🚧');
+    console.log("🚧 Fixing captions with direct config approach 🚧");
 
     // Get the properties to apply from the caption configuration
-    const captionProperties = convertCaptionConfigToProperties(captionConfig);
+    const captionProperties = convertCaptionConfigToProperties(
+      captionConfig,
+      logger
+    );
     console.log(
-      '🚧 Applying caption properties:',
+      "🚧 Applying caption properties:",
       JSON.stringify(captionProperties, null, 2)
     );
 
@@ -389,20 +395,20 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
     template.elements.forEach((scene: any) => {
       scene.elements.forEach((element: any) => {
         if (
-          element.type === 'text' &&
+          element.type === "text" &&
           element.name &&
-          element.name.toLowerCase().includes('subtitle')
+          element.name.toLowerCase().includes("subtitle")
         ) {
           // Remove conflicting old format properties that can interfere
           const conflictingProperties = [
-            'x',
-            'y', // Old positioning format
-            'highlight_color', // Should be transcript_color
-            'shadow_x',
-            'shadow_y',
-            'shadow_blur',
-            'shadow_color', // Legacy shadow properties
-            'text_transform', // Can conflict with Creatomate's text handling
+            "x",
+            "y", // Old positioning format
+            "highlight_color", // Should be transcript_color
+            "shadow_x",
+            "shadow_y",
+            "shadow_blur",
+            "shadow_color", // Legacy shadow properties
+            "text_transform", // Can conflict with Creatomate's text handling
           ];
 
           conflictingProperties.forEach((prop) => {

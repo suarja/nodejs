@@ -80,7 +80,7 @@ export interface VideoGenerationRequest {
   selectedVideos: VideoType[];
   editorialProfile: EditorialProfile;
   voiceId: string;
-  captionConfig?: CaptionConfiguration;
+  captionConfig: CaptionConfiguration;
   outputLanguage: string;
 }
 
