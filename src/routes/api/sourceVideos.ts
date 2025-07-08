@@ -10,6 +10,7 @@ import {
   checkUsageLimit,
   incrementUsage,
 } from "../../services/usageTrackingService";
+import { ResourceType } from "../../types/ressource";
 
 /**
  * Save source video metadata after successful S3 upload
@@ -38,7 +39,10 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
     );
 
     // Step 2: Check usage limit before proceeding
-    const { limitReached } = await checkUsageLimit(userId, "source_videos");
+    const { limitReached } = await checkUsageLimit(
+      userId,
+      ResourceType.SOURCE_VIDEOS
+    );
     if (limitReached) {
       console.warn(`
       source_videos limit reached for user ${userId}`);
@@ -94,7 +98,7 @@ export async function saveSourceVideoHandler(req: Request, res: Response) {
     console.log("✅ Source video saved successfully:", videoData.id);
 
     // Step 5: Increment usage count
-    await incrementUsage(userId, "source_videos");
+    await incrementUsage(userId, ResourceType.SOURCE_VIDEOS);
 
     return successResponseExpress(
       res,

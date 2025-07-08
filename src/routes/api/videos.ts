@@ -2,10 +2,7 @@ import { Request, Response } from "express";
 import { supabase } from "../../config/supabase";
 import { ClerkAuthService } from "../../services/clerkAuthService";
 import { VideoValidationService } from "../../services/video/validation";
-import {
-  VideoGeneratorService,
-  VideoRequestStatus,
-} from "../../services/video/generator";
+import { VideoGeneratorService } from "../../services/video/generator";
 import {
   successResponseExpress,
   errorResponseExpress,
@@ -16,6 +13,8 @@ import {
   usageLimiter,
   incrementResourceUsage,
 } from "../../middleware/usageLimitMiddleware";
+import { VideoRequestStatus } from "../../types/video";
+import { ResourceType } from "../../types/ressource";
 
 /**
  * Video generation API controller matching the original mobile app
@@ -62,7 +61,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     const result = await videoGenerator.generateVideo(validationResult.payload);
 
     // Increment usage *after* the request is successfully created
-    await incrementResourceUsage(user.id, "videos_generated");
+    await incrementResourceUsage(user.id, ResourceType.VIDEOS_GENERATED);
 
     console.log("✅ Video generation process initiated successfully");
 

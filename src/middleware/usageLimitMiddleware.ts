@@ -4,8 +4,7 @@ import {
   checkUsageLimit,
   incrementUsage,
 } from "../services/usageTrackingService";
-
-type ResourceType = "source_videos" | "voice_clones" | "videos_generated"; // Add other resources as needed
+import { ResourceType } from "../types/ressource";
 
 export function usageLimiter(resourceType: ResourceType) {
   return async (req: Request, res: Response, next: NextFunction) => {

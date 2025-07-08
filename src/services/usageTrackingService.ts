@@ -1,10 +1,5 @@
 import { supabase } from "../config/supabase";
-
-type ResourceType =
-  | "videos_generated"
-  | "source_videos"
-  | "voice_clones"
-  | "account_analysis";
+import { ResourceType } from "../types/ressource";
 
 /**
  * Checks if a user has exceeded their limit for a specific resource.
@@ -14,7 +9,7 @@ type ResourceType =
  */
 export async function checkUsageLimit(
   userId: string,
-  resourceType: "source_videos" | "voice_clones" | "videos_generated"
+  resourceType: ResourceType
 ): Promise<{ limitReached: boolean; usage?: any }> {
   const { data: usage, error } = await supabase
     .from("user_usage")
@@ -49,7 +44,7 @@ export async function checkUsageLimit(
  */
 export async function incrementUsage(
   userId: string,
-  resourceType: "source_videos" | "voice_clones" | "videos_generated"
+  resourceType: ResourceType
 ): Promise<boolean> {
   const usedField = `${resourceType}_used`;
 

@@ -27,6 +27,7 @@ import voiceCloneRouter from "./voiceClone";
 import onboardingRouter from "./onboarding";
 import supportRouter from "./support";
 import { usageLimiter } from "../../middleware/usageLimitMiddleware";
+import { ResourceType } from "../../types/ressource";
 
 const apiRouter = express.Router();
 
@@ -107,7 +108,7 @@ apiRouter.put("/source-videos/:videoId", updateSourceVideoHandler);
 // Video generation endpoints (auth handled in the handlers)
 apiRouter.post(
   "/videos/generate",
-  usageLimiter("videos_generated"),
+  usageLimiter(ResourceType.VIDEOS_GENERATED),
   generateVideoHandler
 );
 apiRouter.get("/videos/status/:id", getVideoStatusHandler);

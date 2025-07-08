@@ -1128,7 +1128,7 @@ export type Database = {
           updated_at: string;
           user_id: string;
           videos_generated: number;
-          videos_limit: number;
+          videos_generated_limit: number;
           voice_clones_limit: number;
           voice_clones_used: number;
         };
@@ -1144,7 +1144,7 @@ export type Database = {
           updated_at?: string;
           user_id: string;
           videos_generated?: number;
-          videos_limit?: number;
+          videos_generated_limit?: number;
           voice_clones_limit?: number;
           voice_clones_used?: number;
         };
@@ -1160,7 +1160,7 @@ export type Database = {
           updated_at?: string;
           user_id?: string;
           videos_generated?: number;
-          videos_limit?: number;
+          videos_generated_limit?: number;
           voice_clones_limit?: number;
           voice_clones_used?: number;
         };

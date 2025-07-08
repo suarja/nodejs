@@ -1,5 +1,17 @@
 // Video generation types
 
+import z from "zod";
+
+export const CaptionConfigurationSchema = z.object({
+  enabled: z.boolean(),
+  presetId: z.string().optional(),
+  placement: z.enum(["top", "center", "bottom"]),
+  transcriptColor: z.string().optional(),
+  transcriptEffect: z.string().optional(),
+});
+
+export type CaptionConfiguration = z.infer<typeof CaptionConfigurationSchema>;
+
 export interface VideoType {
   id: string;
   title: string;
@@ -12,29 +24,39 @@ export interface VideoType {
   duration?: number;
   thumbnail_url?: string;
   file_size?: number;
-  processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  processing_status?: "pending" | "processing" | "completed" | "failed";
 }
+
+export const EditorialProfileSchema = z.object({
+  persona_description: z.string(),
+  tone_of_voice: z.string(),
+  audience: z.string(),
+  style_notes: z.string(),
+  examples: z.string().optional(),
+});
+
+export type EditorialProfile = z.infer<typeof EditorialProfileSchema>;
 
 // Type definitions for color constraints
 export type HexColor = `#${string}`;
 
 // Enhanced transcript effects supported by Creatomate
-export type TranscriptEffect =
-  | 'karaoke'
-  | 'highlight'
-  | 'fade'
-  | 'bounce'
-  | 'slide'
-  | 'enlarge';
+// export type TranscriptEffect =
+//   | "karaoke"
+//   | "highlight"
+//   | "fade"
+//   | "bounce"
+//   | "slide"
+//   | "enlarge";
 
-// Caption configuration interface
-export interface CaptionConfiguration {
-  enabled: boolean; // Toggle control for enabling/disabling captions
-  presetId?: string; // Preset identifier (karaoke, beasty, etc.)
-  placement: 'top' | 'center' | 'bottom'; // Position on screen
-  transcriptColor?: HexColor; // Custom color override for transcript_color
-  transcriptEffect?: TranscriptEffect; // Custom effect override for transcript_effect
-}
+// // Caption configuration interface
+// export interface CaptionConfiguration {
+//   enabled: boolean; // Toggle control for enabling/disabling captions
+//   presetId?: string; // Preset identifier (karaoke, beasty, etc.)
+//   placement: "top" | "center" | "bottom"; // Position on screen
+//   transcriptColor?: HexColor; // Custom color override for transcript_color
+//   transcriptEffect?: TranscriptEffect; // Custom effect override for transcript_effect
+// }
 
 // Enhanced types for better validation
 export interface ValidatedVideo {
@@ -43,6 +65,13 @@ export interface ValidatedVideo {
   title: string;
   description: string;
   tags: string[];
+}
+
+export enum VideoRequestStatus {
+  QUEUED = "queued",
+  RENDERING = "rendering",
+  COMPLETED = "done",
+  FAILED = "error",
 }
 
 export interface VideoGenerationRequest {
@@ -55,19 +84,19 @@ export interface VideoGenerationRequest {
   outputLanguage: string;
 }
 
-export interface EditorialProfile {
-  persona_description: string;
-  tone_of_voice: string;
-  audience: string;
-  style_notes: string;
-  examples?: string;
-}
+// export interface EditorialProfile {
+//   persona_description: string;
+//   tone_of_voice: string;
+//   audience: string;
+//   style_notes: string;
+//   examples?: string;
+// }
 
 export interface VideoGenerationResult {
   requestId: string;
   scriptId: string;
   renderId?: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: VideoRequestStatus;
   estimatedCompletionTime?: Date;
 }
 
@@ -81,11 +110,11 @@ export interface VideoGenerationError extends Error {
 // Type guards for runtime validation
 export function isValidVideo(video: any): video is VideoType {
   return (
-    typeof video === 'object' &&
+    typeof video === "object" &&
     video !== null &&
-    typeof video.id === 'string' &&
-    typeof video.upload_url === 'string' &&
-    typeof video.title === 'string' &&
+    typeof video.id === "string" &&
+    typeof video.upload_url === "string" &&
+    typeof video.title === "string" &&
     Array.isArray(video.tags)
   );
 }
@@ -95,16 +124,16 @@ export function isValidCaptionConfig(
   config: any
 ): config is CaptionConfiguration {
   return (
-    typeof config === 'object' &&
+    typeof config === "object" &&
     config !== null &&
-    typeof config.enabled === 'boolean' &&
-    (config.presetId === undefined || typeof config.presetId === 'string') &&
-    ['top', 'center', 'bottom'].includes(config.placement) &&
+    typeof config.enabled === "boolean" &&
+    (config.presetId === undefined || typeof config.presetId === "string") &&
+    ["top", "center", "bottom"].includes(config.placement) &&
     (config.transcriptColor === undefined ||
-      (typeof config.transcriptColor === 'string' &&
-        config.transcriptColor.startsWith('#'))) &&
+      (typeof config.transcriptColor === "string" &&
+        config.transcriptColor.startsWith("#"))) &&
     (config.transcriptEffect === undefined ||
-      ['karaoke', 'highlight', 'fade', 'bounce', 'slide', 'enlarge'].includes(
+      ["karaoke", "highlight", "fade", "bounce", "slide", "enlarge"].includes(
         config.transcriptEffect
       ))
   );
@@ -118,12 +147,12 @@ export function isValidEditorialProfile(
   profile: any
 ): profile is EditorialProfile {
   return (
-    typeof profile === 'object' &&
+    typeof profile === "object" &&
     profile !== null &&
-    typeof profile.persona_description === 'string' &&
-    typeof profile.tone_of_voice === 'string' &&
-    typeof profile.audience === 'string' &&
-    typeof profile.style_notes === 'string'
+    typeof profile.persona_description === "string" &&
+    typeof profile.tone_of_voice === "string" &&
+    typeof profile.audience === "string" &&
+    typeof profile.style_notes === "string"
   );
 }
 
@@ -131,7 +160,7 @@ export function isValidEditorialProfile(
 export interface VideoRequest {
   id: string;
   user_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: VideoRequestStatus;
   payload: VideoGenerationRequest;
   queue_position?: number;
   processing_started_at?: Date;
@@ -144,7 +173,7 @@ export interface VideoRequest {
 
 export interface VideoStatusResponse {
   id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: VideoRequestStatus;
   queuePosition?: number;
   estimatedWaitTime?: string;
   progress?: number;

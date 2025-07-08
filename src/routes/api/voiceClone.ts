@@ -8,6 +8,7 @@ import {
   usageLimiter,
   incrementResourceUsage,
 } from "../../middleware/usageLimitMiddleware";
+import { ResourceType } from "../../types/ressource";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -34,7 +35,7 @@ const elevenLabs = new ElevenLabsClient({ apiKey: ELEVENLABS_API_KEY });
 router.post(
   "/",
   upload.array("files", 10),
-  usageLimiter("voice_clones"),
+  usageLimiter(ResourceType.VOICE_CLONES),
   async (req: any, res) => {
     const requestId = `voice-clone-${Date.now()}`;
 
@@ -225,7 +226,7 @@ router.post(
           if (error) throw error;
 
           // Increment usage only on successful creation of a *new* clone
-          await incrementResourceUsage(user.id, "voice_clones");
+          await incrementResourceUsage(user.id, ResourceType.VOICE_CLONES);
         }
 
         console.log(`✅ Voice clone saved to database for user ${user.id}`);
