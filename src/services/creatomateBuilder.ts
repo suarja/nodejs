@@ -226,6 +226,30 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
   }
 
   /**
+   * Patch tous les éléments audio pour remplacer la clé 'text' par 'source' si besoin
+   */
+  private patchAudioTextToSource(template: any) {
+    if (!template || !template.elements || !Array.isArray(template.elements))
+      return;
+    template.elements.forEach((scene: any) => {
+      if (scene.elements && Array.isArray(scene.elements)) {
+        scene.elements.forEach((element: any) => {
+          if (element.type === "audio" && typeof element.text === "string") {
+            // Si la clé 'text' existe, on la copie dans 'source' et on la supprime
+            element.source = element.text;
+            delete element.text;
+            console.log(
+              `🔧 Patch audio: remplacé 'text' par 'source' dans l'élément audio ${
+                element.id || ""
+              }`
+            );
+          }
+        });
+      }
+    });
+  }
+
+  /**
    * Builds a Creatomate JSON template with enhanced caption support
    */
   async buildJson(params: {
@@ -275,6 +299,9 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       captionStructure: params.captionStructure,
       agentPrompt: params.agentPrompt,
     });
+
+    // Step 3.5: Patch audio elements (text -> source)
+    this.patchAudioTextToSource(template);
 
     // Step 4: Final deterministic URL repair on the generated template
     urlRepairer.repairTemplate(template);

@@ -55,7 +55,7 @@ Each scene is a composition element containing video, audio, and text elements:
       "provider": "eleven_labs",
       "voice_id": "voice_id_here",
       "dynamic": true,
-      "text": "Script text for this scene"
+      "source": "Script text for this scene"
     },
     // Text element (subtitles)
     {

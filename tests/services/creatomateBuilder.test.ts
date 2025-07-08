@@ -7,6 +7,8 @@ import {
 } from "../../src/types/video";
 import winston from "winston";
 import OpenAI from "openai";
+import fs from "fs";
+import path from "path";
 
 // Mock the OpenAI module
 const mockParse = jest.fn<() => Promise<{ output_parsed: ScenePlan }>>();
@@ -218,5 +220,33 @@ describe("CreatomateBuilder with AI Judge and Trimming", () => {
 
     // Verify the template generator was called
     expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("patchAudioTextToSource", () => {
+  test("should replace 'text' by 'source' in all audio elements in no.json", () => {
+    // Charger le template depuis no.json
+    const noJsonPath = path.join(__dirname, "./no.json");
+    const raw = fs.readFileSync(noJsonPath, "utf-8");
+    const data = JSON.parse(raw);
+    // On cible le template dans data.modifications
+    const template = data.modifications;
+
+    // Instancier le builder
+    const builder = CreatomateBuilder.getInstance("gpt-4o");
+    // Appliquer le patch
+    // @ts-ignore accès à la méthode privée pour le test
+    builder.patchAudioTextToSource(template);
+
+    // Parcourir récursivement tous les éléments audio
+    template.elements.forEach((scene: any) => {
+      scene.elements.forEach((element: any) => {
+        if (element.type === "audio") {
+          expect(element.text).toBeUndefined();
+          expect(typeof element.source).toBe("string");
+          expect(element.source.length).toBeGreaterThan(0);
+        }
+      });
+    });
   });
 });
