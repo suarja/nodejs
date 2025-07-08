@@ -5,6 +5,16 @@ import { createOpenAIClient } from "../config/openai";
 import { PromptService } from "./promptService";
 import { convertCaptionConfigToProperties } from "../utils/video/preset-converter";
 import { logger } from "../config/logger";
+import z from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
+import {
+  CaptionConfiguration,
+  EditorialProfile,
+  ScenePlan,
+  ScenePlanSchema,
+  ValidatedVideo,
+} from "../types/video";
+import winston from "winston";
 
 export class CreatomateBuilder {
   private static instance: CreatomateBuilder;
@@ -41,14 +51,10 @@ export class CreatomateBuilder {
 
   private async planVideoStructure(
     script: string,
-    selectedVideos: any[]
-  ): Promise<any> {
-    const completion = await this.openai.chat.completions.create({
-      model: this.model,
-      messages: [
-        {
-          role: "system",
-          content: `You are a video planning expert. Your PRIMARY GOAL is to create a scene-by-scene plan that ALWAYS uses the available video assets.
+    selectedVideos: ValidatedVideo[],
+    logger: winston.Logger
+  ): Promise<ScenePlan> {
+    const systemInstructions = `You are a video planning expert. Your PRIMARY GOAL is to create a scene-by-scene plan that ALWAYS uses the available video assets.
 
 CRITICAL RULES:
 1. EVERY scene MUST be assigned a video asset from the provided list
@@ -83,22 +89,36 @@ OUTPUT FORMAT:
   ]
 }
 
-CRITICAL: The video_asset.url MUST be the exact URL from the available videos list.`,
-        },
-        {
-          role: "user",
-          content: `Script: ${script}
+CRITICAL: The video_asset.url MUST be the exact URL from the available videos list.`;
+    const userInstructions = `Script: ${script}
 
 Available videos: ${JSON.stringify(selectedVideos, null, 2)}
 
-REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset as null.`,
+REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset as null.`;
+
+    const response = await this.openai.responses.parse({
+      model: this.model,
+      input: [
+        {
+          role: "system",
+          content: systemInstructions,
+        },
+        {
+          role: "user",
+          content: userInstructions,
         },
       ],
-      response_format: { type: "json_object" },
+      text: {
+        format: zodTextFormat(ScenePlanSchema, "video_plan"),
+      },
     });
 
-    console.log("Planning completion:", completion.choices[0]?.message.content);
-    return JSON.parse(completion.choices[0]?.message.content || "{}");
+    logger.info("Planning completion:", response.output_parsed);
+    if (!response.output_parsed) {
+      logger.error("Failed to plan video structure", response.error?.message);
+      throw new Error("Failed to plan video structure");
+    }
+    return response.output_parsed;
   }
 
   private async generateTemplate(params: {
@@ -227,16 +247,19 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
    */
   async buildJson(params: {
     script: string;
-    selectedVideos: any[];
+    selectedVideos: ValidatedVideo[];
     voiceId: string;
-    editorialProfile?: any;
-    captionStructure?: any;
-    agentPrompt?: string;
+    editorialProfile: EditorialProfile;
+    captionStructure: any;
+    agentPrompt: string;
+    logger: winston.Logger;
   }): Promise<any> {
-    console.log("🚧 CreatomateBuilder.buildJson called with params:");
-    console.log("Voice ID:", params.voiceId);
-    console.log("Caption structure type:", typeof params.captionStructure);
-    console.log(
+    params.logger.info("🚧 CreatomateBuilder.buildJson called with params:");
+    params.logger.info(
+      "Caption structure type:",
+      typeof params.captionStructure
+    );
+    params.logger.info(
       "Caption structure content:",
       JSON.stringify(params.captionStructure, null, 2)
     );
@@ -244,7 +267,8 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     // Step 1: Plan the video structure (scene-by-scene)
     const scenePlan = await this.planVideoStructure(
       params.script,
-      params.selectedVideos
+      params.selectedVideos,
+      params.logger
     );
 
     // Step 2: Generate the Creatomate template

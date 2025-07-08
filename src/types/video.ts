@@ -1,6 +1,7 @@
 // Video generation types
 
 import z from "zod";
+import { Database } from "../config/supabase-types";
 
 export const CaptionConfigurationSchema = z.object({
   enabled: z.boolean(),
@@ -9,6 +10,23 @@ export const CaptionConfigurationSchema = z.object({
   transcriptColor: z.string().optional(),
   transcriptEffect: z.string().optional(),
 });
+
+export const ScenePlanSchema = z.object({
+  scenes: z.array(
+    z.object({
+      scene_number: z.number(),
+      script_text: z.string(),
+      video_asset: z.object({
+        id: z.string(),
+        url: z.string(),
+        title: z.string(),
+      }),
+      reasoning: z.string(),
+    })
+  ),
+});
+
+export type ScenePlan = z.infer<typeof ScenePlanSchema>;
 
 export type CaptionConfiguration = z.infer<typeof CaptionConfigurationSchema>;
 
@@ -19,12 +37,8 @@ export interface VideoType {
   upload_url: string;
   tags: string[];
   user_id: string;
-  created_at: string;
-  updated_at: string;
-  duration?: number;
-  thumbnail_url?: string;
-  file_size?: number;
-  processing_status?: "pending" | "processing" | "completed" | "failed";
+  analysis_data: Database["public"]["Tables"]["videos"]["Row"]["analysis_data"];
+  analysis_status?: VideoRequestStatus;
 }
 
 export const EditorialProfileSchema = z.object({
@@ -59,13 +73,16 @@ export type HexColor = `#${string}`;
 // }
 
 // Enhanced types for better validation
-export interface ValidatedVideo {
-  id: string;
-  url: string;
-  title: string;
-  description: string;
-  tags: string[];
-}
+export type ValidatedVideo = Pick<
+  Database["public"]["Tables"]["videos"]["Row"],
+  | "id"
+  | "upload_url"
+  | "title"
+  | "description"
+  | "tags"
+  | "user_id"
+  | "analysis_data"
+>;
 
 export enum VideoRequestStatus {
   QUEUED = "queued",

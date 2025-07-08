@@ -432,10 +432,12 @@ export class VideoValidationService {
   static validateVideos(videos: VideoType[]): ValidatedVideo[] {
     return videos.filter(isValidVideo).map((video) => ({
       id: video.id,
-      url: video.upload_url,
+      upload_url: video.upload_url,
       title: video.title,
       description: video.description,
       tags: video.tags,
+      user_id: video.user_id,
+      analysis_data: video.analysis_data,
     }));
   }
 
