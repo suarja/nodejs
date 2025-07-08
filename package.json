@@ -34,14 +34,16 @@
     "typescript": "^5.0.0"
   },
   "scripts": {
-    "start": "node dist/app.js",
+    "start": "ts-node src/app.ts",
+    "dev": "nodemon src/app.ts",
     "build": "tsc",
-    "dev": "nodemon --exec ts-node src/app.ts",
     "dev:watch": "nodemon --watch src --ext ts --exec ts-node src/app.ts",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "postbuild": "cp -r views public dist/ || true",
     "test": "jest",
-    "test:video": "ts-node src/scripts/test-video-analysis.ts"
+    "test:video": "ts-node src/scripts/test-video-analysis.ts",
+    "test:integration": "jest tests/services/creatomateBuilder.test.ts",
+    "test:e2e": "jest tests/services/creatomateBuilder.e2e.test.ts"
   }
 }
