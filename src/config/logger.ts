@@ -20,5 +20,8 @@ export const logger = winston.createLogger({
     new winston.transports.Console(),
     new LogtailTransport(logtail),
   ],
-  defaultMeta: { service: "server-primary" },
+  defaultMeta: {
+    service: "server-primary",
+    env: process.env.NODE_ENV || "development",
+  },
 });
