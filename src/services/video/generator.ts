@@ -271,7 +271,7 @@ export class VideoGeneratorService {
       );
 
       // Step 1.5: Create URL repairer for fixing AI-generated URLs
-      const urlRepairer = new VideoUrlRepairer(videosObj);
+      const urlRepairer = new VideoUrlRepairer(videosObj, logger);
 
       // Step 2: Generate Creatomate template using existing script
       const template = await this.withTimeout(
@@ -391,7 +391,7 @@ export class VideoGeneratorService {
       );
 
       // Step 2.5: Create URL repairer for fixing AI-generated URLs
-      const urlRepairer = new VideoUrlRepairer(videosObj);
+      const urlRepairer = new VideoUrlRepairer(videosObj, logger);
       console.log("🔧 URL repairer initialized for video validation");
 
       // Step 3: Generate Creatomate template

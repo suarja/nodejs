@@ -14,6 +14,7 @@ import {
   ScenePlanSchema,
   ValidatedVideo,
 } from "../types/video";
+import { VideoUrlRepairer } from "./video/videoUrlRepairer";
 import winston from "winston";
 
 export class CreatomateBuilder {
@@ -57,37 +58,20 @@ export class CreatomateBuilder {
     const systemInstructions = `You are a video planning expert. Your PRIMARY GOAL is to create a scene-by-scene plan that ALWAYS uses the available video assets.
 
 CRITICAL RULES:
-1. EVERY scene MUST be assigned a video asset from the provided list
-2. NO scenes should be left without a video asset (video_asset: null is FORBIDDEN)
-3. You can reuse video assets across multiple scenes if needed
-4. Match video assets to script content based on keywords, themes, or general relevance
-5. If a video seems unrelated, still assign it - we prioritize video content over perfect matching
+1.  EVERY scene MUST be assigned a video asset from the provided list.
+2.  NO scenes should be left without a video asset (video_asset: null is FORBIDDEN).
+3.  You can reuse video assets across multiple scenes if needed.
+4.  Match video assets to script content based on keywords, themes, or general relevance.
 
-For each scene, determine:
-1. Natural break points in the script (aim for 3-7 scenes total)
-2. Which video asset best matches the content (REQUIRED - never null)
-3. Brief reasoning for the video choice
-4. Any timing or transition notes
+**NEW: VIDEO SEGMENT SELECTION (TRIMMING):**
+1.  When a video in the "Available videos" list contains an \`analysis_data\` object, you MUST inspect its \`segments\` array.
+2.  For the current script scene, find the **best matching segment** from the \`analysis_data\` by comparing the \`script_text\` with the segment's \`key_points\` or \`description\`.
+3.  If you find a matching segment, you MUST use its \`start_time\` and \`end_time\` to set \`trim_start\` and \`trim_duration\` for that video asset in your response.
+    -   Example: "start_time": "00:05", "end_time": "00:12" -> "trim_start": "5", "trim_duration": "7".
+    -   Calculate trim_duration by subtracting start_time from end_time.
+4.  **CRITICAL**: If a video does **NOT** have \`analysis_data\`, or if no segment is relevant, you **MUST NOT** include \`trim_start\` or \`trim_duration\` for that asset. Leave them undefined.
 
-Available videos format: [{ id: "...", url: "...", title: "...", description: "...", tags: [...] }]
-
-Return a JSON object with an array of scenes. Each scene MUST have a video_asset assigned.
-
-OUTPUT FORMAT:
-{
-  "scenes": [
-    {
-      "scene_number": 1,
-      "script_text": "Text for this scene",
-      "video_asset": {
-        "id": "video_id",
-        "url": "actual_video_url_from_available_videos",
-        "title": "video_title"
-      },
-      "reasoning": "Why this video was chosen"
-    }
-  ]
-}
+Return a JSON object with an array of scenes.
 
 CRITICAL: The video_asset.url MUST be the exact URL from the available videos list.`;
     const userInstructions = `Script: ${script}
@@ -160,20 +144,19 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
 Tu es un expert en génération de vidéos avec Creatomate via JSON.
 
 🎯 OBJECTIF PRINCIPAL
-Tu dois générer un fichier JSON **valide, complet et sans erreur**, destiné à générer une vidéo TikTok à partir de :
-- un script découpé en scènes avec des assets vidéo assignés
-- une liste d'assets vidéo préexistants
+Tu dois générer un fichier JSON **valide, complet et sans erreur**, destiné à générer une vidéo TikTok à partir d'un plan de scènes détaillé.
 
 🚨 RÈGLES CRITIQUES - VIDEO FIRST APPROACH
-1. **CHAQUE SCÈNE DOIT CONTENIR EXACTEMENT 3 ÉLÉMENTS :**
-   - 1 élément vidéo ('type: "video"') - OBLIGATOIRE
-   - 1 voiceover IA ('type: "audio"') - OBLIGATOIRE  
-   - 1 sous-titre dynamique ('type: "text"' avec transcript_source) - OBLIGATOIRE
-   - Chaque élément VIDÉO doit avoir un volume de 0% afin de ne pas interférer avec le voiceover
+1.  **CHAQUE SCÈNE DOIT CONTENIR EXACTEMENT 3 ÉLÉMENTS :**
+    *   1 élément vidéo ('type: "video"'). Utilise EXACTEMENT l'URL fournie dans le \`video_asset\` de la scène.
+    *   1 voiceover IA ('type: "audio"').
+    *   1 sous-titre dynamique ('type: "text"' avec transcript_source).
+2.  **TRIMMING**: Si le \`video_asset\` d'une scène contient \`trim_start\` et \`trim_duration\`, tu DOIS les ajouter à l'élément vidéo correspondant dans le JSON final.
+3.  **VOLUME**: Chaque élément VIDÉO doit avoir un volume de 0% pour ne pas interférer avec le voiceover.
 `;
         userPrompt = `Script: ${params.script}
 
-Scene Plan: ${JSON.stringify(params.scenePlan, null, 2)}
+Scene Plan (Source of Truth): ${JSON.stringify(params.scenePlan, null, 2)}
 
 Voice ID: ${params.voiceId}
 
@@ -190,7 +173,7 @@ ${
 Documentation Creatomate:
 ${docs}
  
-Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les assets vidéo assignés dans le scene plan. Chaque scène doit avoir une vidéo, un voiceover, et des sous-titres.`;
+Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les assets vidéo et les instructions de trim du scene plan.`;
       } else {
         systemPrompt = promptTemplate.system;
         userPrompt = promptTemplate.user;
@@ -264,6 +247,11 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       JSON.stringify(params.captionStructure, null, 2)
     );
 
+    const urlRepairer = new VideoUrlRepairer(
+      params.selectedVideos,
+      params.logger
+    );
+
     // Step 1: Plan the video structure (scene-by-scene)
     const scenePlan = await this.planVideoStructure(
       params.script,
@@ -271,25 +259,46 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
       params.logger
     );
 
-    // Step 2: Generate the Creatomate template
+    // Step 2: Validate and repair the scene plan with an AI Judge
+    const repairedScenePlan = await urlRepairer.repairScenePlanWithAI(
+      scenePlan,
+      params.logger
+    );
+
+    // Step 3: Generate the Creatomate template
     const template = await this.generateTemplate({
       script: params.script,
       selectedVideos: params.selectedVideos,
-      voiceId: params.voiceId || "NFcw9p0jKu3zbmXieNPE", // Default voice if not provided
+      voiceId: params.voiceId,
       editorialProfile: params.editorialProfile,
-      scenePlan,
+      scenePlan: repairedScenePlan,
       captionStructure: params.captionStructure,
       agentPrompt: params.agentPrompt,
     });
 
-    // Step 3: Fix template issues (e.g., video.fit)
+    // Step 4: Final deterministic URL repair on the generated template
+    urlRepairer.repairTemplate(template);
+
+    // Step 5: Fix other template issues (e.g., video.fit)
     this.fixTemplate(template);
 
-    // Step 4: Handle caption configuration (enhanced logic)
+    // Step 6: Handle caption configuration (enhanced logic)
     this.handleCaptionConfiguration(template, params.captionStructure);
 
-    // Step 5: Validate the template
+    // Step 7: Validate the template
     this.validateTemplate(template);
+
+    // Log repair summary
+    const repairSummary = urlRepairer.getRepairSummary();
+    if (repairSummary.totalCorrections > 0) {
+      params.logger.info("📋 URL repairs completed:", repairSummary);
+      params.logger.info(
+        "📋 Detailed corrections:",
+        urlRepairer.getCorrections()
+      );
+    } else {
+      params.logger.info("✅ No URL repairs needed - all URLs were correct");
+    }
 
     return template;
   }

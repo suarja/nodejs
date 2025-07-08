@@ -20,6 +20,8 @@ export const ScenePlanSchema = z.object({
         id: z.string(),
         url: z.string(),
         title: z.string(),
+        trim_start: z.string().optional(),
+        trim_duration: z.string().optional(),
       }),
       reasoning: z.string(),
     })
