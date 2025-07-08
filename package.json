@@ -41,6 +41,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "postbuild": "cp -r views public dist/ || true",
+    "test": "jest",
     "test:video": "ts-node src/scripts/test-video-analysis.ts"
   }
 }
