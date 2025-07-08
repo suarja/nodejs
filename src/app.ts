@@ -7,6 +7,7 @@ import apiRouter from "./routes/api";
 import { testSupabaseConnection } from "./config/supabase";
 import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
+import { logger, logtail } from "./config/logger";
 
 // Load environment variables
 dotenv.config();
@@ -32,7 +33,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Middleware to log requests
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
+  logger.info(`${req.method} ${req.url}`);
   next();
 });
 // API routes
@@ -58,7 +59,7 @@ app.use(
     res: express.Response,
     next: express.NextFunction
   ) => {
-    console.error("❌ Server error:", error);
+    logger.error("❌ Server error:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -70,7 +71,7 @@ app.use(
 // Start server with all service connection tests
 async function startServer() {
   try {
-    console.log("🔧 Testing service connections...");
+    logger.info("🔧 Testing service connections...");
 
     // Test Supabase connection
     const isSupabaseConnected = await testSupabaseConnection();
@@ -83,62 +84,66 @@ async function startServer() {
     const areAgentsConnected = await agentService.testConnections();
 
     if (!isSupabaseConnected) {
-      console.warn(
+      logger.warn(
         "⚠️  Supabase connection failed, but server will continue..."
       );
     }
 
     if (!isS3Connected) {
-      console.warn("⚠️  S3 connection failed, but server will continue...");
+      logger.warn("⚠️  S3 connection failed, but server will continue...");
     }
 
     if (!areAgentsConnected) {
-      console.warn(
+      logger.warn(
         "⚠️  Agent services connection failed, but server will continue..."
       );
     }
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}/`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-      console.log(
+      logger.info(`🚀 Server running at http://localhost:${PORT}/`);
+      logger.info(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+      logger.info(
         `🔌 Supabase: ${
           isSupabaseConnected ? "✅ Connected" : "❌ Disconnected"
         }`
       );
-      console.log(
+      logger.info(
         `📦 S3: ${isS3Connected ? "✅ Connected" : "❌ Disconnected"}`
       );
-      console.log(
+      logger.info(
         `🤖 Agents: ${areAgentsConnected ? "✅ Connected" : "❌ Disconnected"}`
       );
-      console.log("🎯 Server ready for video generation API requests");
-      console.log("");
-      console.log("📍 Available API endpoints:");
-      console.log("  GET  /api/health");
-      console.log("  GET  /api/auth-test (🧪 Debug Clerk authentication)");
-      console.log("  POST /api/s3-upload");
-      console.log("  POST /api/source-videos");
-      console.log("  GET  /api/source-videos");
-      console.log("  PUT  /api/source-videos/:videoId");
-      console.log("  POST /api/videos/generate");
-      console.log("  GET  /api/videos/status/:id");
-      console.log("  GET  /api/videos");
-      console.log("  GET  /api/scripts (📝 List script drafts)");
-      console.log("  GET  /api/scripts/:id (📄 Get specific script)");
-      console.log("  POST /api/scripts/chat (💬 Script chat with streaming)");
-      console.log("  POST /api/scripts/:id/validate (✅ Validate script)");
-      console.log("  DELETE /api/scripts/:id (🗑️ Delete script)");
-      console.log("  POST /api/scripts/:id/duplicate (📋 Duplicate script)");
-      console.log("  POST /api/scripts/:id/generate-video (🎬 Generate video from script)");
-      console.log("");
-      console.log(
+      logger.info("🎯 Server ready for video generation API requests");
+      logger.info("");
+      logger.info("📍 Available API endpoints:");
+      logger.info("  GET  /api/health");
+      logger.info("  GET  /api/auth-test (🧪 Debug Clerk authentication)");
+      logger.info("  POST /api/s3-upload");
+      logger.info("  POST /api/source-videos");
+      logger.info("  GET  /api/source-videos");
+      logger.info("  PUT  /api/source-videos/:videoId");
+      logger.info("  POST /api/videos/generate");
+      logger.info("  GET  /api/videos/status/:id");
+      logger.info("  GET  /api/videos");
+      logger.info("  GET  /api/scripts (📝 List script drafts)");
+      logger.info("  GET  /api/scripts/:id (📄 Get specific script)");
+      logger.info("  POST /api/scripts/chat (💬 Script chat with streaming)");
+      logger.info("  POST /api/scripts/:id/validate (✅ Validate script)");
+      logger.info("  DELETE /api/scripts/:id (🗑️ Delete script)");
+      logger.info("  POST /api/scripts/:id/duplicate (📋 Duplicate script)");
+      logger.info(
+        "  POST /api/scripts/:id/generate-video (🎬 Generate video from script)"
+      );
+      logger.info("");
+      logger.info(
         "🔐 Authentication: All endpoints (except /health) require Clerk JWT token"
       );
-      console.log("📝 Header format: Authorization: Bearer <clerk-jwt-token>");
+      logger.info("📝 Header format: Authorization: Bearer <clerk-jwt-token>");
+      logtail.flush();
     });
   } catch (error) {
-    console.error("❌ Failed to start server:", error);
+    logger.error("❌ Failed to start server:", error);
+    logtail.flush();
     process.exit(1);
   }
 }
