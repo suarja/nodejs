@@ -18,6 +18,7 @@ import {
 } from "../../types/video";
 import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
+import { error } from "console";
 
 const scriptsLogger = logger.child({
   service: "scripts",
@@ -481,9 +482,17 @@ export async function generateVideoFromScriptHandler(
     const RequestParamsSchema = z.object({
       id: z.string(),
     });
-
+    const VideoSchema = z.object({
+      id: z.string(),
+      user_id: z.string(),
+      title: z.string(),
+      description: z.string(),
+      upload_url: z.string(),
+      tags: z.array(z.string()),
+      duration_seconds: z.number().optional(),
+    });
     const RequestBodySchema = z.object({
-      selectedVideos: z.array(z.string()),
+      selectedVideos: z.array(VideoSchema),
       voiceId: z.string().optional(),
       captionConfig: CaptionConfigurationSchema,
       editorialProfile: EditorialProfileSchema,
@@ -495,13 +504,30 @@ export async function generateVideoFromScriptHandler(
     const { success: successParams, data: dataParams } =
       RequestParamsSchema.safeParse(req.params);
 
-    const { success: successBody, data: dataBody } =
-      RequestBodySchema.safeParse(req.body);
+    const {
+      success: successBody,
+      data: dataBody,
+      error: errorBody,
+    } = RequestBodySchema.safeParse(req.body);
 
-    if (!successParams || !successBody) {
+    if (!successParams) {
+      logger.warn("❌ Invalid request parameters", {
+        successParams,
+      });
       return errorResponseExpress(
         res,
         "Invalid request parameters",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!successBody) {
+      logger.warn("❌ Invalid request body", req.body);
+      logger.warn("❌ Invalid request body", {
+        errorBody,
+      });
+      return errorResponseExpress(
+        res,
+        "Invalid request body",
         HttpStatus.BAD_REQUEST
       );
     }
