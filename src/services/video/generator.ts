@@ -261,6 +261,7 @@ export class VideoGeneratorService {
         captionConfig,
         outputLanguage,
         editorialProfile,
+        systemPrompt,
       } = payload;
 
       // Step 1: Fetch and validate videos (same as original)
@@ -282,7 +283,8 @@ export class VideoGeneratorService {
           editorialProfile,
           captionConfig,
           outputLanguage,
-          logger
+          logger,
+          systemPrompt
         ),
         VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
         "Template generation timed out"
@@ -403,7 +405,8 @@ export class VideoGeneratorService {
           editorialProfile,
           captionConfig,
           outputLanguage,
-          logger
+          logger,
+          payload.systemPrompt
         ),
         VideoGeneratorService.SCRIPT_GENERATION_TIMEOUT,
         "Template generation timed out"
@@ -860,7 +863,8 @@ export class VideoGeneratorService {
     editorialProfile: EditorialProfile,
     captionConfig: CaptionConfiguration,
     outputLanguage: string,
-    logger: winston.Logger
+    logger: winston.Logger,
+    systemPrompt: string
   ): Promise<any> {
     try {
       logger.info("🔄 Generating Creatomate template...");
@@ -876,6 +880,7 @@ export class VideoGeneratorService {
           captionInfo: captionConfig
             ? `Caption Config: ${JSON.stringify(captionConfig)}`
             : "",
+          systemPrompt,
         }
       );
 

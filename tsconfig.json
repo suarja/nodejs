@@ -28,7 +28,7 @@
   },
   "include": [
     "src/**/*"
-  ],
+, "tests/services/promptService.test.ts"  ],
   "exclude": [
     "node_modules",
     "dist",

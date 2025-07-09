@@ -630,7 +630,6 @@ export async function generateVideoFromScriptHandler(
       );
     }
 
-    // Generate video using existing service (but with script as starting point)
     const videoGenerator = new VideoGeneratorService(user!);
     const result = await videoGenerator.generateVideoFromScript(
       scriptDraft,
