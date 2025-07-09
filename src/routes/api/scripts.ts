@@ -218,7 +218,10 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
  * Send message in script conversation (with streaming support)
  */
 export async function scriptChatHandler(req: Request, res: Response) {
-  scriptsLogger.info("💬 Processing script chat message...");
+  const scriptChatHandlerLogger = scriptsLogger.child({
+    userId: req.user?.id,
+  });
+  scriptChatHandlerLogger.info("💬 Processing script chat message...");
 
   try {
     // Authenticate user
@@ -247,7 +250,7 @@ export async function scriptChatHandler(req: Request, res: Response) {
       req.headers.accept?.includes("text/event-stream") ||
       req.query.stream === "true";
 
-    const scriptChatService = new ScriptChatService(user!);
+    const scriptChatService = new ScriptChatService(user!, scriptChatHandlerLogger);
 
     if (isStreaming) {
       // Set up streaming response

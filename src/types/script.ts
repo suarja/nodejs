@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Script Chat Message Types
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   metadata?: {
@@ -19,7 +19,7 @@ export interface ChatMessage {
 export interface ScriptDraft {
   id: string;
   title: string;
-  status: 'draft' | 'validated' | 'used';
+  status: "draft" | "validated" | "used";
   current_script: string;
   messages: ChatMessage[];
   output_language: string;
@@ -59,7 +59,7 @@ export interface ScriptChatResponse {
 
 // Streaming Response Type
 export interface ScriptChatStreamResponse {
-  type: 'message_start' | 'content_delta' | 'message_complete' | 'error';
+  type: "message_start" | "content_delta" | "message_complete" | "error";
   scriptId: string;
   content?: string;
   message?: ChatMessage;
@@ -75,7 +75,7 @@ export interface ScriptChatStreamResponse {
 export interface ScriptListItem {
   id: string;
   title: string;
-  status: 'draft' | 'validated' | 'used';
+  status: "draft" | "validated" | "used";
   current_script: string;
   output_language: string;
   updated_at: string;
@@ -93,22 +93,24 @@ export interface ScriptListResponse {
 // Validation Schemas
 export const chatMessageSchema = z.object({
   id: z.string(),
-  role: z.enum(['user', 'assistant']),
+  role: z.enum(["user", "assistant"]),
   content: z.string(),
   timestamp: z.string(),
-  metadata: z.object({
-    isStreaming: z.boolean().optional(),
-    tokensUsed: z.number().optional(),
-    model: z.string().optional(),
-    hasScriptUpdate: z.boolean().optional(),
-    scriptStatus: z.string().optional(),
-  }).optional(),
+  metadata: z
+    .object({
+      isStreaming: z.boolean().optional(),
+      tokensUsed: z.number().optional(),
+      model: z.string().optional(),
+      hasScriptUpdate: z.boolean().optional(),
+      scriptStatus: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const scriptDraftSchema = z.object({
   id: z.string(),
   title: z.string(),
-  status: z.enum(['draft', 'validated', 'used']),
+  status: z.enum(["draft", "validated", "used"]),
   current_script: z.string(),
   messages: z.array(chatMessageSchema),
   output_language: z.string(),
@@ -134,13 +136,13 @@ export const scriptChatRequestSchema = z.object({
 // Utility Functions
 export const estimateScriptDuration = (script: string): number => {
   const wordCount = script.split(/\s+/).length;
-  return wordCount * 0.4; // 0.4 seconds per word
+  return wordCount * 0.9; // 0.9 seconds per word
 };
 
 export const generateScriptTitle = (script: string): string => {
-  const firstLine = script.split('\n')[0] || '';
-  const words = firstLine.split(' ');
-  return words.slice(0, 6).join(' ') + (words.length > 6 ? '...' : '');
+  const firstLine = script.split("\n")[0] || "";
+  const words = firstLine.split(" ");
+  return words.slice(0, 6).join(" ") + (words.length > 6 ? "..." : "");
 };
 
 export const isValidScriptDraft = (draft: any): draft is ScriptDraft => {
@@ -159,4 +161,4 @@ export const isValidChatMessage = (message: any): message is ChatMessage => {
   } catch {
     return false;
   }
-}; 
+};

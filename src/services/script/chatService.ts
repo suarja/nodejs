@@ -15,6 +15,7 @@ import {
   generateScriptTitle,
 } from "../../types/script";
 import { Json } from "../../config/supabase-types";
+import winston from "winston";
 
 /**
  * ScriptChatService - Handles conversational script generation
@@ -28,11 +29,13 @@ import { Json } from "../../config/supabase-types";
 export class ScriptChatService {
   private user: User;
   private openai: OpenAI;
-  private model: string = "gpt-4o"; // Latest OpenAI model
+  private model: string = "gpt-4o-mini"; // Latest OpenAI model
+  private logger: winston.Logger;
 
-  constructor(user: User) {
+  constructor(user: User, logger: winston.Logger) {
     this.user = user;
     this.openai = createOpenAIClient();
+    this.logger = logger;
   }
 
   /**
@@ -40,50 +43,52 @@ export class ScriptChatService {
    */
   async handleChat(request: ScriptChatRequest): Promise<ScriptChatResponse> {
     try {
-      console.log(`💬 Processing chat for user ${this.user.id}`);
-      console.log(`📝 Request message: ${request.message}`);
-      console.log(`👑 User Pro status: ${request.isPro || false}`);
+      this.logger.info(`💬 Processing chat for user ${this.user.id}`);
+      this.logger.info(`📝 Request message: ${request.message}`);
+      this.logger.info(`👑 User Pro status: ${request.isPro || false}`);
 
       // Get or create script draft
-      console.log("🔄 Getting or creating script draft...");
+      this.logger.info("🔄 Getting or creating script draft...");
       const scriptDraft = await this.getOrCreateScriptDraft(request);
-      console.log(`✅ Script draft: ${scriptDraft.id}`);
+      this.logger.info(`✅ Script draft: ${scriptDraft.id}`);
 
       // Get editorial profile
-      console.log("👤 Getting editorial profile...");
+      this.logger.info("👤 Getting editorial profile...");
       const editorialProfile = await this.getEditorialProfile(
         request.editorialProfileId
       );
-      console.log(`✅ Editorial profile loaded`);
+      this.logger.info(`✅ Editorial profile loaded`);
 
       // Get editorial profile and TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        console.log("📱 Getting TikTok analysis context...");
+        this.logger.info("📱 Getting TikTok analysis context...");
         tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
-        console.log(
+        this.logger.info(
           tiktokContext
             ? "✅ TikTok analysis context loaded"
             : "📭 No TikTok analysis available"
         );
       } else {
-        console.log("ℹ️ No scriptId provided, skipping TikTok context fetch");
+        this.logger.info(
+          "ℹ️ No scriptId provided, skipping TikTok context fetch"
+        );
       }
 
       // Create conversation history
-      console.log("💭 Building conversation history...");
+      this.logger.info("💭 Building conversation history...");
       const conversationHistory = this.buildConversationHistory(
         scriptDraft.messages,
         request.message,
         editorialProfile,
         tiktokContext
       );
-      console.log(
+      this.logger.info(
         `✅ Conversation history built: ${conversationHistory.length} messages`
       );
 
       // Generate response with structured output
-      console.log("🤖 Calling OpenAI with structured output...");
+      this.logger.info("🤖 Calling OpenAI with structured output...");
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: conversationHistory,
@@ -91,25 +96,27 @@ export class ScriptChatService {
         max_tokens: 2000,
         response_format: { type: "json_object" },
       });
-      console.log("✅ OpenAI response received");
+      this.logger.info("✅ OpenAI response received");
 
       const assistantMessage = completion.choices[0]?.message?.content;
       if (!assistantMessage) {
         throw new Error("No response generated from OpenAI");
       }
-      console.log(`📝 Assistant message length: ${assistantMessage.length}`);
+      this.logger.info(
+        `📝 Assistant message length: ${assistantMessage.length}`
+      );
 
       // Parse structured response
-      console.log("🔍 Parsing structured response...");
+      this.logger.info("🔍 Parsing structured response...");
       const structuredResponse = this.parseStructuredResponse(assistantMessage);
-      console.log(`✅ Structured response parsed:`, {
+      this.logger.info(`✅ Structured response parsed:`, {
         hasScript: !!structuredResponse.script,
         hasScriptUpdate: structuredResponse.hasScriptUpdate,
         conversationLength: structuredResponse.conversation.length,
       });
 
       // Create chat messages
-      console.log("💬 Creating chat messages...");
+      this.logger.info("💬 Creating chat messages...");
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
         role: "user",
@@ -137,13 +144,13 @@ export class ScriptChatService {
           : scriptDraft.current_script;
 
       // Update script draft
-      console.log("💾 Updating script draft...");
+      this.logger.info("💾 Updating script draft...");
       const updatedDraft = await this.updateScriptDraft(
         scriptDraft.id,
         scriptToSave,
         [userMessage, assistantChatMessage]
       );
-      console.log("✅ Script draft updated successfully");
+      this.logger.info("✅ Script draft updated successfully");
 
       // Track script version for improvement analytics
       if (structuredResponse.hasScriptUpdate && structuredResponse.script) {
@@ -156,7 +163,7 @@ export class ScriptChatService {
         );
       }
 
-      console.log("📤 Returning response...");
+      this.logger.info("📤 Returning response...");
       return {
         scriptId: updatedDraft.id,
         message: assistantChatMessage,
@@ -170,7 +177,7 @@ export class ScriptChatService {
         },
       };
     } catch (error) {
-      console.error("❌ Script chat error:", error);
+      this.logger.error("❌ Script chat error:", error);
       throw error;
     }
   }
@@ -183,7 +190,7 @@ export class ScriptChatService {
     res: Response
   ): Promise<void> {
     try {
-      console.log(`🔄 Processing streaming chat for user ${this.user.id}`);
+      this.logger.info(`🔄 Processing streaming chat for user ${this.user.id}`);
 
       // Step 1: Initializing
       res.setHeader("Content-Type", "text/event-stream");
@@ -331,7 +338,7 @@ export class ScriptChatService {
 
       res.end();
     } catch (error) {
-      console.error("❌ Streaming chat error:", error);
+      this.logger.error("❌ Streaming chat error:", error);
       this.sendStreamMessage(res, {
         type: "error",
         scriptId: request.scriptId || "",
@@ -508,7 +515,9 @@ export class ScriptChatService {
 
     if (!promptTemplate) {
       // Fallback to basic prompt if template not found
-      console.warn("⚠️ Script chat prompt template not found, using fallback");
+      this.logger.warn(
+        "⚠️ Script chat prompt template not found, using fallback"
+      );
       return this.buildFallbackConversationHistory(
         previousMessages,
         currentMessage,
@@ -714,7 +723,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       // Fallback to simple title generation
       return generateScriptTitle(script);
     } catch (error) {
-      console.warn("Failed to generate AI title, using fallback:", error);
+      this.logger.warn("Failed to generate AI title, using fallback:", error);
       return generateScriptTitle(script);
     }
   }
@@ -760,7 +769,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         metadata,
       };
     } catch (error) {
-      console.warn(
+      this.logger.warn(
         "⚠️ Failed to parse structured response, falling back to extraction:",
         error
       );
@@ -837,9 +846,9 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         },
       });
 
-      console.log("✅ Script version tracked for analytics");
+      this.logger.info("✅ Script version tracked for analytics");
     } catch (error) {
-      console.warn("⚠️ Failed to track script version:", error);
+      this.logger.warn("⚠️ Failed to track script version:", error);
       // Don't throw - this shouldn't break the main flow
     }
   }
@@ -882,7 +891,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
     scriptId: string
   ): Promise<string | null> {
     try {
-      console.log("🎯 Getting TikTok analysis context...");
+      this.logger.info("🎯 Getting TikTok analysis context...");
 
       // First, find the account_id associated with this script draft or user
       const { data: scriptDraft } = await supabase
@@ -903,7 +912,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         .single();
 
       if (!analysis || !analysis.account_id) {
-        console.log("📭 No valid TikTok analysis found for this user.");
+        this.logger.info("📭 No valid TikTok analysis found for this user.");
         return null;
       }
 
@@ -916,7 +925,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       );
 
       if (!response.ok) {
-        console.warn(
+        this.logger.warn(
           `⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`
         );
         return null; // or fallback to a basic context
@@ -925,13 +934,13 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       const fullContext: any = await response.json();
 
       if (!fullContext || !fullContext.account) {
-        console.warn(
+        this.logger.warn(
           `⚠️ Could not retrieve full context via API for account ${accountId}`
         );
         return null;
       }
 
-      console.log(
+      this.logger.info(
         `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`
       );
 
@@ -939,7 +948,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       const context = this.formatTikTokAnalysisContext(fullContext);
       return context;
     } catch (error) {
-      console.error("❌ Error fetching TikTok analysis context:", error);
+      this.logger.error("❌ Error fetching TikTok analysis context:", error);
       return null;
     }
   }
