@@ -9,7 +9,8 @@ import { s3Client, S3_BUCKET_NAME } from "../config/aws";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { spawn, execSync } from "child_process";
-import { promisify } from "util";
+import winston from "winston";
+import { logger } from "../config/logger";
 
 const model = "gemini-2.5-flash";
 
@@ -40,21 +41,21 @@ async function initializeFFmpegPath(): Promise<string | null> {
   try {
     if (isRailway || process.platform === "linux") {
       // Railway/Linux: Use system FFmpeg installed via nixpacks
-      console.log("🐧 Detecting system FFmpeg (Railway/Linux)...");
+      logger.info("🐧 Detecting system FFmpeg (Railway/Linux)...");
       const ffmpegPath = execSync("which ffmpeg", { encoding: "utf8" }).trim();
       FFMPEG_PATH = ffmpegPath;
-      console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
+      logger.info(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
     } else {
       // Local development: Try system first, then fallback to npm package
       try {
-        console.log("💻 Detecting system FFmpeg (local)...");
+        logger.info("💻 Detecting system FFmpeg (local)...");
         const ffmpegPath = execSync("which ffmpeg", {
           encoding: "utf8",
         }).trim();
         FFMPEG_PATH = ffmpegPath;
-        console.log(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
+        logger.info(`✅ Found system FFmpeg: ${FFMPEG_PATH}`);
       } catch {
-        console.log("📦 Falling back to npm FFmpeg package...");
+        logger.info("📦 Falling back to npm FFmpeg package...");
         try {
           // Fallback to npm package for local development - using dynamic import
           const ffmpegModule = await import("@ffmpeg-installer/ffmpeg").catch(
@@ -62,19 +63,19 @@ async function initializeFFmpegPath(): Promise<string | null> {
           );
           if (ffmpegModule && ffmpegModule.path) {
             FFMPEG_PATH = ffmpegModule.path;
-            console.log(`✅ Found npm FFmpeg: ${FFMPEG_PATH}`);
+            logger.info(`✅ Found npm FFmpeg: ${FFMPEG_PATH}`);
           } else {
-            console.log("⚠️ No FFmpeg found via npm package");
+            logger.info("⚠️ No FFmpeg found via npm package");
             FFMPEG_PATH = null;
           }
         } catch (npmError) {
-          console.log("⚠️ No FFmpeg found via npm package");
+          logger.info("⚠️ No FFmpeg found via npm package");
           FFMPEG_PATH = null;
         }
       }
     }
   } catch (error) {
-    console.error("❌ FFmpeg path detection failed:", error);
+    logger.error("❌ FFmpeg path detection failed:", error);
     FFMPEG_PATH = null;
   }
 
@@ -130,8 +131,10 @@ export interface GeminiAnalysisResponse {
 
 export class GeminiService {
   private genAI: GoogleGenAI;
+  private logger: winston.Logger;
 
-  constructor() {
+  constructor(logger: winston.Logger) {
+    this.logger = logger;
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       throw new Error("GOOGLE_API_KEY environment variable is required");
@@ -146,7 +149,7 @@ export class GeminiService {
   }
 
   private async initializeService() {
-    console.log(
+    this.logger.info(
       `🚀 Initializing Gemini Service (Environment: ${
         process.env.NODE_ENV || "development"
       })`
@@ -222,8 +225,10 @@ export class GeminiService {
     }
 
     return new Promise((resolve) => {
-      console.log(`🎬 Converting video to MP4: ${inputPath} → ${outputPath}`);
-      console.log(`🔧 Using FFmpeg: ${ffmpegPath}`);
+      this.logger.info(
+        `🎬 Converting video to MP4: ${inputPath} → ${outputPath}`
+      );
+      this.logger.info(`🔧 Using FFmpeg: ${ffmpegPath}`);
 
       const ffmpeg = spawn(ffmpegPath, [
         "-i",
@@ -250,14 +255,14 @@ export class GeminiService {
 
       ffmpeg.on("close", (code) => {
         if (code === 0) {
-          console.log(`✅ Video conversion successful: ${outputPath}`);
+          this.logger.info(`✅ Video conversion successful: ${outputPath}`);
           resolve({
             success: true,
             outputPath: outputPath,
           });
         } else {
-          console.error(`❌ FFmpeg conversion failed with code ${code}`);
-          console.error(`FFmpeg stderr: ${stderr}`);
+          this.logger.error(`❌ FFmpeg conversion failed with code ${code}`);
+          this.logger.error(`FFmpeg stderr: ${stderr}`);
           resolve({
             success: false,
             error: `Video conversion failed: ${stderr.slice(-200)}`, // Last 200 chars of error
@@ -266,7 +271,7 @@ export class GeminiService {
       });
 
       ffmpeg.on("error", (error) => {
-        console.error(`❌ FFmpeg spawn error:`, error);
+        this.logger.error(`❌ FFmpeg spawn error:`, error);
         resolve({
           success: false,
           error: `FFmpeg not found or failed to start: ${error.message}`,
@@ -388,7 +393,7 @@ export class GeminiService {
     }
 
     // Default to MP4 conversion for unknown formats
-    console.warn(
+    this.logger.warn(
       `⚠️ Unknown video format signature: ${signature}. Defaulting to MP4 conversion.`
     );
     return {
@@ -413,15 +418,17 @@ export class GeminiService {
       const isTikTok = videoUrl.includes("tiktok.com");
 
       if (!isYouTube && !isTikTok) {
-        console.log(`🔗 URL not supported for direct analysis: ${videoUrl}`);
-        console.log(
+        this.logger.info(
+          `🔗 URL not supported for direct analysis: ${videoUrl}`
+        );
+        this.logger.info(
           `💡 Direct URL analysis only works for YouTube and TikTok URLs`
         );
-        console.log(`🔄 Falling back to Files API for S3/other URLs`);
+        this.logger.info(`🔄 Falling back to Files API for S3/other URLs`);
         return null;
       }
 
-      console.log(`🎬 Attempting direct URL analysis for: ${videoUrl}`);
+      this.logger.info(`🎬 Attempting direct URL analysis for: ${videoUrl}`);
 
       const prompt = this.getAnalysisPromptWithVideoUrl(videoUrl);
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
@@ -435,7 +442,7 @@ export class GeminiService {
 
       // Check if Gemini returned the "cannot access" error
       if (responseText.includes("Cannot access or analyze video content")) {
-        console.log(
+        this.logger.info(
           `⚠️ Direct URL analysis failed - video not accessible to Gemini`
         );
         return null;
@@ -443,7 +450,7 @@ export class GeminiService {
 
       return this.parseAnalysisResult(responseText);
     } catch (error) {
-      console.log(`⚠️ Direct URL analysis failed:`, error);
+      this.logger.info(`⚠️ Direct URL analysis failed:`, error);
       return null;
     }
   }
@@ -455,7 +462,7 @@ export class GeminiService {
     const startTime = Date.now();
 
     try {
-      console.log(`🧠 Starting video analysis for: ${publicUrl}`);
+      this.logger.info(`🧠 Starting video analysis for: ${publicUrl}`);
 
       let analysisResult: VideoAnalysisData;
 
@@ -463,16 +470,16 @@ export class GeminiService {
       const directResult = await this.tryDirectUrlAnalysis(publicUrl);
 
       if (directResult) {
-        console.log(`✅ Direct URL analysis successful`);
+        this.logger.info(`✅ Direct URL analysis successful`);
         analysisResult = directResult;
       } else {
-        console.log(`🔄 Using Files API for video analysis`);
+        this.logger.info(`🔄 Using Files API for video analysis`);
         analysisResult = await this.analyzeWithFilesAPI(publicUrl);
       }
 
       const analysisTime = Date.now() - startTime;
 
-      console.log(`✅ Video analysis completed in ${analysisTime}ms`);
+      this.logger.info(`✅ Video analysis completed in ${analysisTime}ms`);
 
       return {
         success: true,
@@ -481,7 +488,10 @@ export class GeminiService {
       };
     } catch (error) {
       const analysisTime = Date.now() - startTime;
-      console.error(`❌ Video analysis failed after ${analysisTime}ms:`, error);
+      this.logger.error(
+        `❌ Video analysis failed after ${analysisTime}ms:`,
+        error
+      );
 
       return {
         success: false,
@@ -502,7 +512,7 @@ export class GeminiService {
     const startTime = Date.now();
 
     try {
-      console.log(
+      this.logger.info(
         `🧠 Starting direct video analysis for: ${fileName} (${fileSize} bytes)`
       );
 
@@ -531,7 +541,7 @@ export class GeminiService {
       await fs.writeFile(tempFilePath, videoBuffer);
 
       try {
-        console.log(`📁 Video saved to temporary file: ${tempFilePath}`);
+        this.logger.info(`📁 Video saved to temporary file: ${tempFilePath}`);
 
         // Upload vers Gemini en utilisant le chemin du fichier
         const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
@@ -545,7 +555,7 @@ export class GeminiService {
         let retries = 0;
 
         while (myfile.state === FileState.PROCESSING && retries < maxRetries) {
-          console.log(
+          this.logger.info(
             `🔄 Waiting for file to be processed... (attempt ${
               retries + 1
             }/${maxRetries}), state: ${myfile.state}`
@@ -571,7 +581,7 @@ export class GeminiService {
             .filter(Boolean)
             .join(", ");
 
-          console.error(
+          this.logger.error(
             `❌ File processing failed: state=${myfile.state}, error=${
               errorDetails || "No error details provided"
             }`
@@ -583,7 +593,7 @@ export class GeminiService {
           );
         }
 
-        console.log(`📤 Video uploaded to Gemini, URI: ${myfile.uri}`);
+        this.logger.info(`📤 Video uploaded to Gemini, URI: ${myfile.uri}`);
 
         if (!myfile.uri) {
           throw new Error(
@@ -606,7 +616,9 @@ export class GeminiService {
         const analysisResult = this.parseAnalysisResult(result.text || "");
         const analysisTime = Date.now() - startTime;
 
-        console.log(`✅ Direct video analysis completed in ${analysisTime}ms`);
+        this.logger.info(
+          `✅ Direct video analysis completed in ${analysisTime}ms`
+        );
 
         return {
           success: true,
@@ -618,14 +630,14 @@ export class GeminiService {
         // Nettoyage : supprimer le fichier temporaire
         try {
           await fs.unlink(tempFilePath);
-          console.log(`🗑️ Temporary file deleted: ${tempFilePath}`);
+          this.logger.info(`🗑️ Temporary file deleted: ${tempFilePath}`);
         } catch (cleanupError) {
-          console.error("Error cleaning up temporary file:", cleanupError);
+          this.logger.error("Error cleaning up temporary file:", cleanupError);
         }
       }
     } catch (error) {
       const analysisTime = Date.now() - startTime;
-      console.error(
+      this.logger.error(
         `❌ Direct video analysis failed after ${analysisTime}ms:`,
         error
       );
@@ -680,7 +692,7 @@ export class GeminiService {
 
       return this.parseAnalysisResult(result.text || "");
     } catch (error) {
-      console.error("Error in Files API analysis:", error);
+      this.logger.error("Error in Files API analysis:", error);
       throw error;
     }
   }
@@ -698,14 +710,14 @@ export class GeminiService {
       // 1. Download video from public URL or S3
       const videoBuffer = await this.downloadFromUrl(publicUrl);
       const fileSize = videoBuffer.length;
-      console.log(`📥 Downloaded video: ${fileSize} bytes`);
+      this.logger.info(`📥 Downloaded video: ${fileSize} bytes`);
 
       // 2. Detect video format and determine if conversion is needed
       const formatInfo = this.detectVideoFormat(videoBuffer);
-      console.log(
+      this.logger.info(
         `🎬 Detected format: ${formatInfo.detectedFormat} (${formatInfo.mimeType})`
       );
-      console.log(`🔄 Needs conversion: ${formatInfo.needsConversion}`);
+      this.logger.info(`🔄 Needs conversion: ${formatInfo.needsConversion}`);
 
       // 3. Create temp directory
       const tempDir = path.join(process.cwd(), "temp");
@@ -717,7 +729,7 @@ export class GeminiService {
         `temp_${Date.now()}_original.${formatInfo.extension}`
       );
       await fs.writeFile(tempFilePath, videoBuffer);
-      console.log(`📁 Original video saved: ${tempFilePath}`);
+      this.logger.info(`📁 Original video saved: ${tempFilePath}`);
 
       let finalFilePath = tempFilePath;
       let finalMimeType = formatInfo.mimeType;
@@ -735,11 +747,11 @@ export class GeminiService {
         );
 
         if (conversionResult.success && conversionResult.outputPath) {
-          console.log(`✅ Video converted to MP4: ${convertedFilePath}`);
+          this.logger.info(`✅ Video converted to MP4: ${convertedFilePath}`);
           finalFilePath = convertedFilePath;
           finalMimeType = "video/mp4";
         } else {
-          console.warn(
+          this.logger.warn(
             `⚠️ Conversion failed, using original: ${conversionResult.error}`
           );
           // Continue with original file if conversion fails
@@ -753,7 +765,7 @@ export class GeminiService {
         config: { mimeType: finalMimeType },
       });
 
-      console.log(`📤 Video uploaded to Gemini: ${myfile.name}`);
+      this.logger.info(`📤 Video uploaded to Gemini: ${myfile.name}`);
 
       // 7. Wait for processing with enhanced timeout
       const maxRetries = 15; // Increased for larger files
@@ -762,7 +774,7 @@ export class GeminiService {
 
       while (myfile.state === FileState.PROCESSING && retries < maxRetries) {
         const elapsed = Math.round((Date.now() - processingStartTime) / 1000);
-        console.log(
+        this.logger.info(
           `🔄 Waiting for file processing... (${
             retries + 1
           }/${maxRetries}), state: ${myfile.state}, elapsed: ${elapsed}s`
@@ -791,7 +803,7 @@ export class GeminiService {
           .filter(Boolean)
           .join(", ");
 
-        console.error(
+        this.logger.error(
           `❌ File processing failed: state=${myfile.state}, error=${
             errorDetails || "No error details"
           }`
@@ -821,7 +833,7 @@ export class GeminiService {
         throw new Error(errorMessage);
       }
 
-      console.log(`📤 Video ready for analysis: ${myfile.uri}`);
+      this.logger.info(`📤 Video ready for analysis: ${myfile.uri}`);
 
       if (!myfile.uri) {
         throw new Error(
@@ -843,7 +855,7 @@ export class GeminiService {
 
       return this.parseAnalysisResult(result.text || "");
     } catch (error) {
-      console.error("❌ Files API analysis error:", error);
+      this.logger.error("❌ Files API analysis error:", error);
       throw error;
     } finally {
       // Cleanup temp files
@@ -852,9 +864,9 @@ export class GeminiService {
       for (const filePath of filesToCleanup) {
         try {
           await fs.unlink(filePath!);
-          console.log(`🗑️ Cleaned up: ${path.basename(filePath!)}`);
+          this.logger.info(`🗑️ Cleaned up: ${path.basename(filePath!)}`);
         } catch (cleanupError) {
-          console.error(`⚠️ Cleanup error for ${filePath}:`, cleanupError);
+          this.logger.error(`⚠️ Cleanup error for ${filePath}:`, cleanupError);
         }
       }
     }
@@ -868,7 +880,7 @@ export class GeminiService {
       throw new Error("S3_BUCKET_NAME environment variable is required");
     }
 
-    console.log(
+    this.logger.info(
       `📥 Downloading from S3: ${s3Key} from bucket ${S3_BUCKET_NAME}`
     );
 
@@ -891,10 +903,12 @@ export class GeminiService {
       }
 
       const buffer = Buffer.concat(chunks);
-      console.log(`📥 Successfully downloaded ${buffer.length} bytes from S3`);
+      this.logger.info(
+        `📥 Successfully downloaded ${buffer.length} bytes from S3`
+      );
       return buffer;
     } catch (error) {
-      console.error("❌ Error downloading from S3:", error);
+      this.logger.error("❌ Error downloading from S3:", error);
       throw new Error(
         `Failed to download video from S3: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -907,7 +921,7 @@ export class GeminiService {
    * Download video from URL
    */
   private async downloadFromUrl(url: string): Promise<Buffer> {
-    console.log(`📥 Downloading from URL: ${url}`);
+    this.logger.info(`📥 Downloading from URL: ${url}`);
 
     try {
       const response = await fetch(url);
@@ -919,10 +933,12 @@ export class GeminiService {
 
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      console.log(`📥 Successfully downloaded ${buffer.length} bytes from URL`);
+      this.logger.info(
+        `📥 Successfully downloaded ${buffer.length} bytes from URL`
+      );
       return buffer;
     } catch (error) {
-      console.error("❌ Error downloading from URL:", error);
+      this.logger.error("❌ Error downloading from URL:", error);
       throw new Error(
         `Failed to download video from URL: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -1131,6 +1147,3 @@ export class GeminiService {
     }
   }
 }
-
-// Export singleton instance
-export const geminiService = new GeminiService();

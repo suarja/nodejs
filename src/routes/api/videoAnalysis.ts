@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
 import {
-  geminiService,
+  GeminiService,
   GeminiAnalysisResponse,
 } from "../../services/geminiService";
 import { ClerkAuthService } from "../../services/clerkAuthService";
+import { logger } from "../../config/logger";
 
 export async function videoAnalysisHandler(req: Request, res: Response) {
   try {
-    console.log("🧠 Video analysis request received");
+    logger.info("🧠 Video analysis request received");
 
     // Step 1: Authenticate user using ClerkAuthService
     const authHeader = req.headers.authorization;
@@ -16,19 +17,19 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
       clerkUser,
       errorResponse: authError,
     } = await ClerkAuthService.verifyUser(authHeader);
-    console.log(
-      "🔐 User authenticated for video analysis - DB ID:",
-      user?.id,
-      "Clerk ID:",
-      clerkUser?.id
-    );
 
     if (authError) {
+      logger.error("❌ Video analysis authentication error:", authError);
       return res.status(authError.status).json(authError);
     }
+    const videoAnalysisLogger = logger.child({
+      user: user?.id,
+      clerkUser: clerkUser?.id,
+      videoUrl: req.body.videoUrl,
+    });
 
     const { videoUrl } = req.body;
-    console.log("videoUrl", videoUrl);
+    videoAnalysisLogger.info("videoUrl", videoUrl);
     // Validate required fields
     if (!videoUrl) {
       return res.status(400).json({
@@ -40,6 +41,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
     // Step 3: Analyze video with Gemini
     let analysisResult: GeminiAnalysisResponse | null = null;
     try {
+      const geminiService = new GeminiService(videoAnalysisLogger);
       analysisResult = await geminiService.analyzeVideoFromS3(videoUrl);
 
       if (!analysisResult.success) {
@@ -49,7 +51,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
             "Cannot access or analyze video content"
           )
         ) {
-          console.log(
+          videoAnalysisLogger.info(
             "📹 Video not accessible to Gemini - this is expected, proceeding with manual editing"
           );
 
@@ -68,7 +70,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
         throw new Error(analysisResult.error || "Analysis failed");
       }
     } catch (analysisError) {
-      console.error("❌ Video analysis failed:", analysisError);
+      videoAnalysisLogger.error("❌ Video analysis failed:", analysisError);
 
       // Check if it's the expected error
       const errorMessage =
@@ -76,7 +78,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
           ? analysisError.message
           : "Analysis failed";
       if (errorMessage.includes("Cannot access or analyze video content")) {
-        console.log(
+        videoAnalysisLogger.info(
           "📹 Video analysis not possible - redirecting to manual editing"
         );
 
@@ -97,7 +99,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
       });
     }
 
-    console.log(
+    videoAnalysisLogger.info(
       `✅ Video processing completed for user ${user!.id} in ${
         analysisResult.analysis_time
       }ms`
@@ -113,7 +115,7 @@ export async function videoAnalysisHandler(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    console.error("❌ Video analysis endpoint error:", error);
+    logger.error("❌ Video analysis endpoint error:", error);
     return res.status(500).json({
       success: false,
       error: "Internal server error during video analysis",
@@ -129,6 +131,7 @@ export async function videoAnalysisHealthHandler(req: Request, res: Response) {
     console.log("🏥 Video analysis health check requested");
 
     // Test Gemini service connection
+    const geminiService = new GeminiService(logger);
     const isHealthy = await geminiService.testConnection();
 
     if (!isHealthy) {
