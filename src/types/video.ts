@@ -84,6 +84,7 @@ export type ValidatedVideo = Pick<
   | "tags"
   | "user_id"
   | "analysis_data"
+  | "duration_seconds"
 >;
 
 export enum VideoRequestStatus {

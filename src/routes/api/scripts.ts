@@ -489,7 +489,7 @@ export async function generateVideoFromScriptHandler(
       description: z.string(),
       upload_url: z.string(),
       tags: z.array(z.string()),
-      duration_seconds: z.number().optional(),
+      duration_seconds: z.number().nullable(),
     });
     const RequestBodySchema = z.object({
       selectedVideos: z.array(VideoSchema),

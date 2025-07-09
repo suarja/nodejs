@@ -1,0 +1,251 @@
+{
+  "id": "9907c35c-e678-4619-b1c8-781ef01d3e3a",
+  "status": "succeeded",
+  "url": "https://f002.backblazeb2.com/file/creatomate-c8xg3hsxdu/9907c35c-e678-4619-b1c8-781ef01d3e3a.mp4",
+  "snapshot_url": "https://f002.backblazeb2.com/file/creatomate-c8xg3hsxdu/9907c35c-e678-4619-b1c8-781ef01d3e3a-snapshot.jpg",
+  "output_format": "mp4",
+  "render_scale": 1,
+  "width": 1080,
+  "height": 1920,
+  "frame_rate": 30,
+  "duration": 29.366666666666667,
+  "file_size": 13888505,
+  "modifications": {
+    "width": 1080,
+    "height": 1920,
+    "elements": [
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751885056638_IMG_0013.MP4",
+            "volume": 0,
+            "duration": null,
+            "trim_start": "0",
+            "trim_duration": "13"
+          },
+          {
+            "id": "voice-scene-1",
+            "type": "audio",
+            "track": 3,
+            "source": "Je refuse un projet sur quatre en IA et automatisation.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=npN5rw2vrFhZgvVWVKF5 stability=0.50"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#FFFD03",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-1",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1750119614835_IMG_3712.MOV",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-2",
+            "type": "audio",
+            "track": 3,
+            "source": "Pas parce que je suis arrogant, mais parce que je ne travaille pas avec ceux qui veulent tout, tout de suite, sans comprendre le potentiel.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=npN5rw2vrFhZgvVWVKF5 stability=0.50"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#FFFD03",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-2",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1750119325190_IMG_3711.MOV",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-3",
+            "type": "audio",
+            "track": 3,
+            "source": "Vous savez, ceux qui comparent l'IA à des gadgets bon marché.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=npN5rw2vrFhZgvVWVKF5 stability=0.50"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#FFFD03",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-3",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1750120057415_IMG_3719.MOV",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-4",
+            "type": "audio",
+            "track": 3,
+            "source": "J'accepte seulement de collaborer avec ceux qui sont prêts à investir du temps pour obtenir des résultats concrets.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=npN5rw2vrFhZgvVWVKF5 stability=0.50"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#FFFD03",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-4",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751884206247_IMG_0010.MP4",
+            "volume": 0,
+            "duration": null,
+            "trim_start": "0",
+            "trim_duration": "2"
+          },
+          {
+            "id": "voice-scene-5",
+            "type": "audio",
+            "track": 3,
+            "source": "Si vous êtes sérieux sur l'automatisation, commencez par comprendre vos besoins réels avant de demander des solutions miracles.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=npN5rw2vrFhZgvVWVKF5 stability=0.50"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#FFFD03",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-5",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      }
+    ],
+    "output_format": "mp4"
+  },
+  "webhook_url": "https://nodejs-production-a774.up.railway.app/api/webhooks/creatomate",
+  "metadata": "{\"requestId\":\"44cc1c67-4ad0-432b-b6f3-20f7cf01887c\",\"userId\":\"f3d0be35-d766-4a4a-92bc-ae72614b9470\",\"scriptId\":\"f4fd6793-80f0-4c87-824e-2b50976ed3ae\",\"prompt\":\"Video from script: Éliminer les Gimminck Efficacement\",\"timestamp\":\"2025-07-09T12:18:02.535Z\"}"
+}
