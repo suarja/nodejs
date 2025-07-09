@@ -1,8 +1,13 @@
 #!/usr/bin/env ts-node
 
-import { geminiService } from "../services/geminiService";
+import winston, { Logger } from "winston";
+import { GeminiService } from "../services/geminiService";
 import dotenv from "dotenv";
-
+const logger = new Logger({
+  level: "info",
+  format: winston.format.json(),
+  transports: [new winston.transports.Console()],
+});
 // Load environment variables
 dotenv.config();
 
@@ -25,6 +30,7 @@ async function testVideoAnalysis() {
   try {
     // Test the analysis
     const startTime = Date.now();
+    const geminiService = new GeminiService(logger);
     const result = await geminiService.analyzeVideoFromS3(testVideoUrl);
     const duration = Date.now() - startTime;
 
