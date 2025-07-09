@@ -57,7 +57,7 @@ Each scene is a composition element containing video, audio, and text elements:
       "dynamic": true,
       "source": "Script text for this scene"
     },
-    // Text element (subtitles)
+    // Text element (subtitles)****
     {
       "id": "subtitle-1",
       "type": "text",
