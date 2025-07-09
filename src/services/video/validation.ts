@@ -438,6 +438,7 @@ export class VideoValidationService {
       tags: video.tags,
       user_id: video.user_id,
       analysis_data: video.analysis_data,
+      duration_seconds: video.duration_seconds,
     }));
   }
 

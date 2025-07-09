@@ -41,6 +41,7 @@ export interface VideoType {
   user_id: string;
   analysis_data: Database["public"]["Tables"]["videos"]["Row"]["analysis_data"];
   analysis_status?: VideoRequestStatus;
+  duration_seconds: number | null;
 }
 
 export const EditorialProfileSchema = z.object({
