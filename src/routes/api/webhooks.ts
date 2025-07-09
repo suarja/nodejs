@@ -114,8 +114,7 @@ router.post("/creatomate", async (req: Request, res: Response) => {
       updateData = {
         render_status: "done",
         render_url: webhookData.url,
-        duration_seconds: webhookData.duration,
-        
+        render_duration: webhookData.duration,
       };
       creatomateWebhookChildLogger.info(
         `✅ Render succeeded for request ${requestId}, URL: ${webhookData.url}`
