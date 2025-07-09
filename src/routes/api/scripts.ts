@@ -218,11 +218,6 @@ export async function getScriptDraftHandler(req: Request, res: Response) {
  * Send message in script conversation (with streaming support)
  */
 export async function scriptChatHandler(req: Request, res: Response) {
-  const scriptChatHandlerLogger = scriptsLogger.child({
-    userId: req.user?.id,
-  });
-  scriptChatHandlerLogger.info("💬 Processing script chat message...");
-
   try {
     // Authenticate user
     const authHeader = req.headers.authorization;
@@ -230,9 +225,13 @@ export async function scriptChatHandler(req: Request, res: Response) {
       await ClerkAuthService.verifyUser(authHeader);
 
     if (authError) {
+      scriptsLogger.error("❌ Error authenticating user:", authError);
       return errorResponseExpress(res, authError.error, authError.status);
     }
-
+    const scriptChatHandlerLogger = scriptsLogger.child({
+      userId: user?.id,
+    });
+    scriptChatHandlerLogger.info("💬 Processing script chat message...");
     // Simple validation for now (we'll add Zod schema later)
     const payload = req.body;
 
@@ -250,7 +249,10 @@ export async function scriptChatHandler(req: Request, res: Response) {
       req.headers.accept?.includes("text/event-stream") ||
       req.query.stream === "true";
 
-    const scriptChatService = new ScriptChatService(user!, scriptChatHandlerLogger);
+    const scriptChatService = new ScriptChatService(
+      user!,
+      scriptChatHandlerLogger
+    );
 
     if (isStreaming) {
       // Set up streaming response
