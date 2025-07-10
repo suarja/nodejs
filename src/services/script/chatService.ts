@@ -756,7 +756,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         const words = parsed.script.split(/\s+/).length;
         metadata = {
           wordCount: words,
-          estimatedDuration: Math.round(words * 0.4), // ~150 words per minute = 0.4 seconds per word
+          estimatedDuration: Math.round(words * 0.9), // ~150 words per minute = 0.4 seconds per word
           status: metadata.status || "draft",
           nextSteps: metadata.nextSteps,
         };
