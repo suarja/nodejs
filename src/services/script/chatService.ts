@@ -93,12 +93,18 @@ export class ScriptChatService {
         model: this.model,
         messages: conversationHistory,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 1000,
         response_format: { type: "json_object" },
       });
       this.logger.info("✅ OpenAI response received");
 
       const assistantMessage = completion.choices[0]?.message?.content;
+
+      const tokensUsed = completion.usage?.total_tokens;
+      this.logger.info(`💰 Tokens used: ${tokensUsed}`);
+      if (tokensUsed) {
+        await this.updateTokenUsage(tokensUsed);
+      }
       if (!assistantMessage) {
         throw new Error("No response generated from OpenAI");
       }
@@ -179,6 +185,34 @@ export class ScriptChatService {
     } catch (error) {
       this.logger.error("❌ Script chat error:", error);
       throw error;
+    }
+  }
+
+  async updateTokenUsage(tokensUsed: number) {
+    const { data: tokensUsage, error: tokensUsageError } = await supabase
+      .from("user_usage")
+      .select("*")
+      .eq("id", this.user.id)
+      .single();
+
+    if (tokensUsageError) {
+      this.logger.error("❌ Error fetching tokens usage:", tokensUsageError);
+    }
+
+    let newTokensUsed = 0;
+    if (tokensUsage) {
+      newTokensUsed = (tokensUsage.tokens_used || 0) + tokensUsed;
+    } else {
+      newTokensUsed = tokensUsed;
+    }
+
+    const { data, error } = await supabase
+      .from("user_usage")
+      .update({ tokens_used: newTokensUsed })
+      .eq("id", this.user.id);
+
+    if (error) {
+      this.logger.error("❌ Error updating tokens usage:", error);
     }
   }
 

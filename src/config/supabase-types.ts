@@ -1125,6 +1125,8 @@ export type Database = {
           next_reset_date: string;
           source_videos_limit: number;
           source_videos_used: number;
+          token_limit: number | null;
+          tokens_used: number | null;
           updated_at: string;
           user_id: string;
           videos_generated: number;
@@ -1141,6 +1143,8 @@ export type Database = {
           next_reset_date?: string;
           source_videos_limit?: number;
           source_videos_used?: number;
+          token_limit?: number | null;
+          tokens_used?: number | null;
           updated_at?: string;
           user_id: string;
           videos_generated?: number;
@@ -1157,6 +1161,8 @@ export type Database = {
           next_reset_date?: string;
           source_videos_limit?: number;
           source_videos_used?: number;
+          token_limit?: number | null;
+          tokens_used?: number | null;
           updated_at?: string;
           user_id?: string;
           videos_generated?: number;
@@ -1269,13 +1275,6 @@ export type Database = {
           user_id?: string | null;
         };
         Relationships: [
-          {
-            foreignKeyName: "video_requests_script_id_fkey";
-            columns: ["script_id"];
-            isOneToOne: false;
-            referencedRelation: "scripts";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "video_requests_user_id_fkey";
             columns: ["user_id"];
