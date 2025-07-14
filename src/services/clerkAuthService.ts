@@ -8,7 +8,6 @@ import { logger } from "../config/logger";
 import { Database } from "../config/supabase-types";
 import { User } from "../types/user";
 
-
 export interface ClerkAuthResult {
   user: User | null;
   clerkUser: ClerkUser | null;
@@ -194,8 +193,6 @@ export class ClerkAuthService {
       if (!user || !clerkUser) {
         return { success: false, error: "User not found" };
       }
-      const deletedUser = await this.clerkClient.users.deleteUser(clerkUser.id);
-      logger.info("🔍 Deleted user:", deletedUser);
 
       const { error } = await supabase
         .from("users")
@@ -207,6 +204,9 @@ export class ClerkAuthService {
           error: "Failed to delete user from database",
         };
       }
+      const deletedUser = await this.clerkClient.users.deleteUser(clerkUser.id);
+      logger.info("🔍 Deleted user:", deletedUser);
+
       return { success: true, error: null };
     } catch (error) {
       logger.error("❌ Error deleting user:", error);
