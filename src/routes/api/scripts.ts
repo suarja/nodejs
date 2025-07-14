@@ -19,6 +19,7 @@ import {
 import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
 import { error } from "console";
+import { GuardAgentService } from "../../services/script/GuardAgentService";
 
 const scriptsLogger = logger.child({
   service: "scripts",
@@ -242,31 +243,29 @@ export async function scriptChatHandler(req: Request, res: Response) {
         HttpStatus.BAD_REQUEST
       );
     }
-
-    // Check if streaming is requested
-    const isStreaming =
-      payload.streaming === true ||
-      req.headers.accept?.includes("text/event-stream") ||
-      req.query.stream === "true";
+    const guardAgentService = new GuardAgentService(scriptChatHandlerLogger);
+    const isSafe = await guardAgentService.validateRequest(payload.message);
+    if (!isSafe.is_safe || !isSafe.is_on_topic) {
+      scriptChatHandlerLogger.warn({
+        message: "🛡️ Guard Agent blocked request",
+        reason: isSafe.reason,
+      });
+      return errorResponseExpress(
+        res,
+        "Message blocked by Security Agent 🫩",
+        HttpStatus.FORBIDDEN,
+        isSafe.reason
+      );
+    }
 
     const scriptChatService = new ScriptChatService(
       user!,
       scriptChatHandlerLogger
     );
 
-    if (isStreaming) {
-      // Set up streaming response
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("Access-Control-Allow-Origin", "*");
-
-      await scriptChatService.handleStreamingChat(payload, res);
-    } else {
-      // Standard response
-      const result = await scriptChatService.handleChat(payload);
-      return successResponseExpress(res, result);
-    }
+    // Standard response
+    const result = await scriptChatService.handleChat(payload);
+    return successResponseExpress(res, result);
   } catch (error) {
     scriptsLogger.error("❌ Script chat error:", error);
     return errorResponseExpress(
