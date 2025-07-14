@@ -33,7 +33,10 @@ export async function checkUsageLimit(
   const limit = usage[limitField as keyof typeof usage];
   const used = usage[usedField as keyof typeof usage];
 
-  return { limitReached: used >= limit, usage };
+  return {
+    limitReached: (used ?? 0) >= (limit ?? 0),
+    usage,
+  };
 }
 
 /**
