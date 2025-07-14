@@ -1,4 +1,3 @@
-import { User } from "@supabase/supabase-js";
 import { supabase } from "../../config/supabase";
 import { ScriptGenerator } from "../scriptGenerator";
 import { ScriptReviewer } from "../scriptReviewer";
@@ -22,6 +21,7 @@ import winston from "winston";
 import { Database } from "../../config/supabase-types";
 import { VideoRequestStatus } from "../../types/video";
 import { logger } from "../../config/logger";
+import { User } from "../../types/user";
 /**
  * Enhanced video generation service with async background processing
  *

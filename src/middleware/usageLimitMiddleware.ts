@@ -15,7 +15,7 @@ export function usageLimiter(resourceType: ResourceType) {
       authHeader
     );
 
-    if (errorResponse) {
+    if (errorResponse || !user) {
       return res.status(errorResponse.status).json(errorResponse);
     }
 

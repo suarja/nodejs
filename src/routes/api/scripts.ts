@@ -11,15 +11,14 @@ import { VideoGeneratorService } from "../../services/video/generator";
 import { VideoValidationService } from "../../services/video/validation";
 import { logger } from "../../config/logger";
 import { z } from "zod";
-import { stat } from "fs";
 import {
   CaptionConfigurationSchema,
   EditorialProfileSchema,
 } from "../../types/video";
 import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
-import { error } from "console";
 import { GuardAgentService } from "../../services/script/GuardAgentService";
+import { User } from "../../types/user";
 
 const scriptsLogger = logger.child({
   service: "scripts",

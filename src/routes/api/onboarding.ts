@@ -30,11 +30,10 @@ router.post("/", upload.single("file"), async (req, res) => {
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
-      authHeader
-    );
+    const { user, errorResponse: authError } =
+      await ClerkAuthService.verifyUser(authHeader);
 
-    if (authError) {
+    if (authError || !user) {
       console.log(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }
@@ -46,7 +45,7 @@ router.post("/", upload.single("file"), async (req, res) => {
     const surveyData = req.body.survey_data
       ? JSON.parse(req.body.survey_data)
       : null;
-    const enableVoiceClone = req.body.enable_voice_clone === 'true';
+    const enableVoiceClone = req.body.enable_voice_clone === "true";
 
     if (!file) {
       console.log(`❌ No audio file provided for request ${requestId}`);
@@ -162,7 +161,7 @@ router.post("/", upload.single("file"), async (req, res) => {
         }
 
         // Create voice clone using ElevenLabs
-        const voiceName = `${user.email.split("@")[0]}_voice_${Date.now()}`;
+        const voiceName = `${user.email?.split("@")[0]}_voice_${Date.now()}`;
 
         console.log(`📡 Creating voice in ElevenLabs: ${voiceName}`);
 
@@ -212,7 +211,9 @@ router.post("/", upload.single("file"), async (req, res) => {
         console.log(`📋 Continuing with editorial profile creation only`);
       }
     } else {
-      console.log(`📋 Voice clone disabled by user preference, skipping voice creation`);
+      console.log(
+        `📋 Voice clone disabled by user preference, skipping voice creation`
+      );
     }
 
     console.log(`✅ Onboarding processed successfully`);
@@ -252,21 +253,20 @@ router.post("/tiktok-analysis", async (req, res) => {
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } = await ClerkAuthService.verifyUser(
-      authHeader
-    );
+    const { user, errorResponse: authError } =
+      await ClerkAuthService.verifyUser(authHeader);
 
     if (authError) {
       console.log(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }
 
-    console.log(`✅ User authenticated: ${user.email} (${user.id})`);
+    console.log(`✅ User authenticated: ${user?.email} (${user?.id})`);
 
     // Step 2: Validate input
     const { tiktok_handle } = req.body;
 
-    if (!tiktok_handle || typeof tiktok_handle !== 'string') {
+    if (!tiktok_handle || typeof tiktok_handle !== "string") {
       console.log(`❌ Invalid TikTok handle for request ${requestId}`);
       return res.status(400).json({
         success: false,
@@ -275,15 +275,16 @@ router.post("/tiktok-analysis", async (req, res) => {
       });
     }
 
-    const cleanHandle = tiktok_handle.replace('@', '').trim();
+    const cleanHandle = tiktok_handle.replace("@", "").trim();
     console.log(`📱 Processing TikTok handle: @${cleanHandle}`);
 
     // Step 3: Forward request to TikTok Analyzer
-    const tiktokAnalyzerUrl = process.env.TIKTOK_ANALYZER_URL || 'http://localhost:3001';
-    
+    const tiktokAnalyzerUrl =
+      process.env.TIKTOK_ANALYZER_URL || "http://localhost:3001";
+
     try {
       console.log(`📡 Forwarding to TikTok Analyzer: ${tiktokAnalyzerUrl}`);
-      
+
       const response = await axios.post(
         `${tiktokAnalyzerUrl}/api/account-analysis`,
         {
@@ -292,8 +293,8 @@ router.post("/tiktok-analysis", async (req, res) => {
         },
         {
           headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
+            Authorization: authHeader,
+            "Content-Type": "application/json",
           },
           timeout: 30000, // 30 seconds timeout
         }
@@ -308,14 +309,13 @@ router.post("/tiktok-analysis", async (req, res) => {
         data: {
           run_id: response.data.run_id,
           account_handle: cleanHandle,
-          status: response.data.status || 'processing',
+          status: response.data.status || "processing",
         },
         requestId,
       });
-
     } catch (tiktokError: any) {
       console.log(`❌ TikTok Analyzer request failed:`, tiktokError.message);
-      
+
       if (tiktokError.response?.status === 403) {
         return res.status(403).json({
           success: false,
@@ -331,7 +331,6 @@ router.post("/tiktok-analysis", async (req, res) => {
         requestId,
       });
     }
-
   } catch (error: any) {
     console.error(`❌ TikTok Analysis request failed:`, error);
 

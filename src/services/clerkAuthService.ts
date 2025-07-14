@@ -1,9 +1,17 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
+import {
+  createClerkClient,
+  verifyToken,
+  User as ClerkUser,
+} from "@clerk/backend";
 import { supabase } from "../config/supabase";
+import { logger } from "../config/logger";
+import { Database } from "../config/supabase-types";
+import { User } from "../types/user";
+
 
 export interface ClerkAuthResult {
-  user: any | null;
-  clerkUser: any | null;
+  user: User | null;
+  clerkUser: ClerkUser | null;
   errorResponse: any | null;
 }
 
@@ -23,14 +31,14 @@ export class ClerkAuthService {
   static async verifyUser(
     authHeader?: string | null
   ): Promise<ClerkAuthResult> {
-    console.log(
+    logger.info(
       "🔍 ClerkAuthService.verifyUser called with header:",
       authHeader ? "Present" : "Missing"
     );
 
     // Check if auth header exists
     if (!authHeader) {
-      console.log("❌ No authorization header provided");
+      logger.error("❌ No authorization header provided");
       return {
         user: null,
         clerkUser: null,
@@ -44,15 +52,15 @@ export class ClerkAuthService {
 
     // Get token from header
     const token = authHeader.replace("Bearer ", "");
-    console.log("🔍 Extracted token length:", token.length);
-    console.log("🔍 Token preview:", token.substring(0, 50) + "...");
+    logger.info("🔍 Extracted token length:", token.length);
+    logger.info("🔍 Token preview:", token.substring(0, 50) + "...");
 
     // Basic JWT format validation
     const jwtParts = token.split(".");
-    console.log("🔍 JWT parts count:", jwtParts.length);
+    logger.info("🔍 JWT parts count:", jwtParts.length);
 
     if (jwtParts.length !== 3) {
-      console.log(
+      logger.error(
         "❌ Invalid JWT format - should have 3 parts separated by dots"
       );
       return {
@@ -68,20 +76,20 @@ export class ClerkAuthService {
     }
 
     try {
-      console.log("🔍 Attempting to verify token with Clerk...");
+      logger.info("🔍 Attempting to verify token with Clerk...");
 
       // Verify JWT token with Clerk using the standalone verifyToken function
       const verifiedToken = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY!,
       });
 
-      console.log(
+      logger.info(
         "✅ Token verified successfully:",
         verifiedToken ? "Valid" : "Invalid"
       );
 
       if (!verifiedToken || !verifiedToken.sub) {
-        console.log("❌ Token verification failed - no sub claim");
+        logger.error("❌ Token verification failed - no sub claim");
         return {
           user: null,
           clerkUser: null,
@@ -93,13 +101,11 @@ export class ClerkAuthService {
         };
       }
 
-      console.log("🔍 Clerk user ID from token:", verifiedToken.sub);
-
       // Get Clerk user details using the user ID from the token
       const clerkUser = await this.clerkClient.users.getUser(verifiedToken.sub);
 
       if (!clerkUser) {
-        console.log("❌ Clerk user not found for ID:", verifiedToken.sub);
+        logger.error("❌ Clerk user not found");
         return {
           user: null,
           clerkUser: null,
@@ -111,27 +117,20 @@ export class ClerkAuthService {
         };
       }
 
-      console.log(
-        "✅ Clerk user found:",
-        clerkUser.id,
-        clerkUser.emailAddresses[0]?.emailAddress
-      );
+      logger.info("✅ Clerk user found");
 
       // Get database user using Clerk user ID
-      console.log(
-        "🔍 Looking up database user with clerk_user_id:",
-        clerkUser.id
-      );
+      logger.info("🔍 Looking up database user");
 
       const { data: databaseUser, error: dbError } = await supabase
         .from("users")
-        .select("id, email, full_name, avatar_url, role, clerk_user_id")
+        .select("*")
         .eq("clerk_user_id", clerkUser.id)
         .single();
 
       if (dbError || !databaseUser) {
-        console.error("❌ Database user lookup error:", dbError);
-        console.log(
+        logger.error("❌ Database user lookup error:", dbError);
+        logger.info(
           "🔍 This might mean the user needs to complete onboarding to create database record"
         );
         return {
@@ -145,7 +144,7 @@ export class ClerkAuthService {
         };
       }
 
-      console.log(
+      logger.info(
         `🔐 User verified: ${clerkUser.emailAddresses[0]?.emailAddress} (Clerk: ${clerkUser.id}, DB: ${databaseUser.id})`
       );
 
@@ -156,8 +155,8 @@ export class ClerkAuthService {
         errorResponse: null,
       };
     } catch (error: any) {
-      console.error("❌ Clerk auth service error:", error);
-      console.error("❌ Error details:", {
+      logger.error("❌ Clerk auth service error:", error);
+      logger.error("❌ Error details:", {
         name: error?.name || "Unknown",
         message: error?.message || "Unknown error",
         token: token.substring(0, 50) + "...",
@@ -187,5 +186,31 @@ export class ClerkAuthService {
   ): Promise<string | null> {
     const { user } = await this.verifyUser(authHeader);
     return user?.id || null;
+  }
+
+  static async deleteUser(authHeader?: string | null) {
+    try {
+      const { user, clerkUser } = await this.verifyUser(authHeader);
+      if (!user || !clerkUser) {
+        return { success: false, error: "User not found" };
+      }
+      const deletedUser = await this.clerkClient.users.deleteUser(clerkUser.id);
+      logger.info("🔍 Deleted user:", deletedUser);
+
+      const { error } = await supabase
+        .from("users")
+        .delete()
+        .eq("clerk_user_id", clerkUser.id);
+      if (error) {
+        return {
+          success: false,
+          error: "Failed to delete user from database",
+        };
+      }
+      return { success: true, error: null };
+    } catch (error) {
+      logger.error("❌ Error deleting user:", error);
+      return { success: false, error: "Failed to delete user" };
+    }
   }
 }

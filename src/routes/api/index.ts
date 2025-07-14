@@ -28,6 +28,7 @@ import onboardingRouter from "./onboarding";
 import supportRouter from "./support";
 import { usageLimiter } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
+import userManagementRouter from "./userManagement";
 
 const apiRouter = express.Router();
 
@@ -178,6 +179,9 @@ apiRouter.use("/onboarding", onboardingRouter);
 
 // Support endpoints
 apiRouter.use("/support", supportRouter);
+
+// User management endpoints
+apiRouter.use("/user-management", userManagementRouter);
 
 // List video requests endpoint (updated to use ClerkAuthService)
 apiRouter.get("/videos", async (req, res) => {

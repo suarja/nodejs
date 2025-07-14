@@ -281,7 +281,7 @@ router.get("/samples/:voiceId", async (req, res) => {
     const { user, errorResponse: authError } =
       await ClerkAuthService.verifyUser(authHeader);
 
-    if (authError) {
+    if (authError || !user) {
       console.log(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }
@@ -364,7 +364,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
     const { user, errorResponse: authError } =
       await ClerkAuthService.verifyUser(authHeader);
 
-    if (authError) {
+    if (authError || !user) {
       console.log(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }

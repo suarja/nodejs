@@ -27,7 +27,7 @@ export async function authenticateUser(
       authHeader
     );
 
-    if (errorResponse) {
+    if (errorResponse || !user) {
       res.status(errorResponse.status).json(errorResponse);
       return;
     }
@@ -35,8 +35,7 @@ export async function authenticateUser(
     // Add user to request object
     req.user = {
       id: user.id,
-      email: user.email,
-      ...user.user_metadata,
+      email: user.email || "",
     };
 
     console.log(`🔐 User authenticated: ${user.email} (${user.id})`);
@@ -64,14 +63,16 @@ export async function optionalAuth(
       authHeader
     );
 
-    if (!errorResponse && user) {
-      req.user = {
-        id: user.id,
-        email: user.email,
-        ...user.user_metadata,
-      };
-      console.log(`🔐 Optional auth successful: ${user.email} (${user.id})`);
+    if (errorResponse || !user) {
+      res.status(errorResponse.status).json(errorResponse);
+      return;
     }
+
+    req.user = {
+      id: user.id,
+      email: user.email || "",
+    };
+    console.log(`🔐 Optional auth successful: ${user.email} (${user.id})`);
 
     next();
   } catch (error) {

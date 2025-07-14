@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { User } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { supabase } from "../../config/supabase";
 import { createOpenAIClient } from "../../config/openai";
@@ -16,6 +15,7 @@ import {
 } from "../../types/script";
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
+import { User } from "../../types/user";
 
 /**
  * ScriptChatService - Handles conversational script generation
