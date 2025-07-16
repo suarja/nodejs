@@ -335,6 +335,47 @@ export async function validateScriptHandler(req: Request, res: Response) {
   }
 }
 
+const ModifyCurrentScriptSchema = z.object({
+  currentScript: z.string(),
+});
+
+export async function modifyCurrentScriptHandler(req: Request, res: Response) {
+  scriptsLogger.info("✅ Modifying current script...");
+  try {
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse: authError } =
+      await ClerkAuthService.verifyUser(authHeader);
+    if (authError) {
+      return errorResponseExpress(res, authError.error, authError.status);
+    }
+    const { id } = req.params;
+    if (!id) {
+      return errorResponseExpress(res, "Script ID is required", HttpStatus.BAD_REQUEST);
+    }
+    const { success, data, error } = ModifyCurrentScriptSchema.safeParse(req.body);
+    if (!success) {
+      return errorResponseExpress(res, "Invalid request body", HttpStatus.BAD_REQUEST);
+    }
+    const { currentScript } = data;
+    const { data: scriptDraft, error: updateError } = await supabase
+      .from("script_drafts")
+      .update({ current_script: currentScript })
+      .eq("id", id)
+      .eq("user_id", user!.id)
+      .select()
+      .single();
+    if (error) {
+      return errorResponseExpress(res, "Failed to modify current script", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    return successResponseExpress(res, {
+      message: "Current script modified successfully",
+      script: scriptDraft,
+    });
+  } catch (error) {
+    scriptsLogger.error("❌ Script modification error:", error);
+}
+}
+
 /**
  * DELETE /api/scripts/:id
  * Delete a script draft

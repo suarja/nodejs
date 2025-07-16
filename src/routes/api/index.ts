@@ -20,6 +20,7 @@ import {
   deleteScriptDraftHandler,
   duplicateScriptDraftHandler,
   generateVideoFromScriptHandler,
+  modifyCurrentScriptHandler,
 } from "./scripts";
 import promptsRouter from "./prompts";
 import webhooksRouter from "./webhooks";
@@ -122,6 +123,10 @@ apiRouter.post("/scripts/:id/validate", validateScriptHandler);
 apiRouter.delete("/scripts/:id", deleteScriptDraftHandler);
 apiRouter.post("/scripts/:id/duplicate", duplicateScriptDraftHandler);
 apiRouter.post("/scripts/:id/generate-video", generateVideoFromScriptHandler);
+apiRouter.post(
+  "/scripts/:id/modify-current-script",
+  modifyCurrentScriptHandler
+);
 
 // Test endpoint for streaming (NO AUTH)
 apiRouter.post("/test/streaming", async (req, res) => {
