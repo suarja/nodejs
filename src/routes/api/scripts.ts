@@ -336,7 +336,7 @@ export async function validateScriptHandler(req: Request, res: Response) {
 }
 
 const ModifyCurrentScriptSchema = z.object({
-  currentScript: z.string(),
+  current_script: z.string(),
 });
 
 export async function modifyCurrentScriptHandler(req: Request, res: Response) {
@@ -350,22 +350,36 @@ export async function modifyCurrentScriptHandler(req: Request, res: Response) {
     }
     const { id } = req.params;
     if (!id) {
-      return errorResponseExpress(res, "Script ID is required", HttpStatus.BAD_REQUEST);
+      return errorResponseExpress(
+        res,
+        "Script ID is required",
+        HttpStatus.BAD_REQUEST
+      );
     }
-    const { success, data, error } = ModifyCurrentScriptSchema.safeParse(req.body);
+    const { success, data, error } = ModifyCurrentScriptSchema.safeParse(
+      req.body
+    );
     if (!success) {
-      return errorResponseExpress(res, "Invalid request body", HttpStatus.BAD_REQUEST);
+      return errorResponseExpress(
+        res,
+        "Invalid request body",
+        HttpStatus.BAD_REQUEST
+      );
     }
-    const { currentScript } = data;
+    const { current_script } = data;
     const { data: scriptDraft, error: updateError } = await supabase
       .from("script_drafts")
-      .update({ current_script: currentScript })
+      .update({ current_script: current_script })
       .eq("id", id)
       .eq("user_id", user!.id)
       .select()
       .single();
     if (error) {
-      return errorResponseExpress(res, "Failed to modify current script", HttpStatus.INTERNAL_SERVER_ERROR);
+      return errorResponseExpress(
+        res,
+        "Failed to modify current script",
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
     return successResponseExpress(res, {
       message: "Current script modified successfully",
@@ -373,7 +387,7 @@ export async function modifyCurrentScriptHandler(req: Request, res: Response) {
     });
   } catch (error) {
     scriptsLogger.error("❌ Script modification error:", error);
-}
+  }
 }
 
 /**

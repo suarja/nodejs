@@ -122,9 +122,9 @@ apiRouter.post("/scripts/chat", scriptChatHandler);
 apiRouter.post("/scripts/:id/validate", validateScriptHandler);
 apiRouter.delete("/scripts/:id", deleteScriptDraftHandler);
 apiRouter.post("/scripts/:id/duplicate", duplicateScriptDraftHandler);
-apiRouter.post("/scripts/:id/generate-video", generateVideoFromScriptHandler);
+apiRouter.post("/scripts/generate-video/:id", generateVideoFromScriptHandler);
 apiRouter.post(
-  "/scripts/:id/modify-current-script",
+  "/scripts/modify-current-script/:id",
   modifyCurrentScriptHandler
 );
 

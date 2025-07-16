@@ -70,7 +70,9 @@ CRITICAL RULES:
     -   Example: "start_time": "00:05", "end_time": "00:12" -> "trim_start": "5", "trim_duration": "7".
     -   Calculate trim_duration by subtracting start_time from end_time.
 4.  **CRITICAL**: If a video does **NOT** have \`analysis_data\`, or if no segment is relevant, you **MUST NOT** include \`trim_start\` or \`trim_duration\` for that asset. Leave them undefined.
-
+5. **Estimate Voiceover Duration**: For each scene, estimate the spoken duration of the audio source text. The formula to calculate this is to multiply the number of words by 0.9 to get the duration in seconds.  
+6.  **Compare with Video Duration**: Compare the voiceover duration to the duration of the video asset provided in the <scenePlan/>. The video's duration is determined by its \`trim_duration\` property if it exists.
+7.  **Handle Insufficient Video Duration**:\n    - **IF** the video duration is SHORTER than the estimated voiceover duration, you MUST add more video content to cover the gap.\n    - **How to Add More Video**: Add one or more additional \`video\` elements within the same scene \`composition\`. Select relevant clips from the full \`{selectedVideos}\` list. Place these additional video elements on \`track: 1\` to play sequentially after the primary video by adjusting their \`time\` property.\n    - **IF** no \`trim_duration\` is specified for the primary video, you can simply set its \`duration\` to \`null\`, which will automatically stretch it to the length of the voiceover. This is the preferred method when no specific trim is required.\n\n# 6. Concrete 'Living' Example\nHere is a real-world example of the first two scenes of a final JSON template.
 Return a JSON object with an array of scenes.
 
 CRITICAL: The video_asset.url MUST be the exact URL from the available videos list.`;
