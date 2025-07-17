@@ -9,11 +9,12 @@ import {
   incrementResourceUsage,
 } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
+import { logger } from "../../config/logger";
 
 // Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB
 });
 
 const router = express.Router();
@@ -24,7 +25,9 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 if (!ELEVENLABS_API_KEY) {
   console.error("❌ ELEVENLABS_API_KEY not found in environment variables");
 }
-
+const voiceLogger = logger.child({
+  module: "voiceClone",
+});
 // Initialize ElevenLabs client
 const elevenLabs = new ElevenLabsClient({ apiKey: ELEVENLABS_API_KEY });
 
@@ -40,18 +43,18 @@ router.post(
     const requestId = `voice-clone-${Date.now()}`;
 
     try {
-      console.log(`🎤 Voice clone request started: ${requestId}`);
+      voiceLogger.info(`🎤 Voice clone request started: ${requestId}`);
 
       // User is already authenticated by the usageLimiter middleware
       const { user } = req;
-      console.log(`✅ User authenticated: ${user.email} (${user.id})`);
+      voiceLogger.info(`✅ User authenticated: ${user.email} (${user.id})`);
 
       // Step 2: Validate input
       const { name } = req.body;
       const files = req.files as Express.Multer.File[];
 
       if (!name || typeof name !== "string" || name.trim().length === 0) {
-        console.log(`❌ Invalid name for request ${requestId}:`, name);
+        voiceLogger.error(`❌ Invalid name for request ${requestId}:`, name);
         return res.status(400).json({
           success: false,
           error: "Name is required and must be a non-empty string",
@@ -60,7 +63,7 @@ router.post(
       }
 
       if (!files || files.length === 0) {
-        console.log(`❌ No files provided for request ${requestId}`);
+        voiceLogger.error(`❌ No files provided for request ${requestId}`);
         return res.status(400).json({
           success: false,
           error: "At least one audio file is required",
@@ -68,13 +71,13 @@ router.post(
         });
       }
 
-      console.log(`📁 Files received: ${files.length} files`);
+      voiceLogger.info(`📁 Files received: ${files.length} files`);
 
       // Validate each file
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file) {
-          console.log(`❌ File ${i + 1} is undefined`);
+          voiceLogger.error(`❌ File ${i + 1} is undefined`);
           return res.status(400).json({
             success: false,
             error: `File ${i + 1} is missing or invalid`,
@@ -82,7 +85,7 @@ router.post(
           });
         }
 
-        console.log(
+        voiceLogger.info(
           `📄 File ${i + 1}: ${file.originalname}, size: ${file.size}, type: ${
             file.mimetype
           }`
@@ -90,7 +93,7 @@ router.post(
 
         // Check for empty files
         if (file.size === 0) {
-          console.log(`❌ File ${i + 1} is empty: ${file.originalname}`);
+          voiceLogger.error(`❌ File ${i + 1} is empty: ${file.originalname}`);
           return res.status(400).json({
             success: false,
             error: `File "${file.originalname}" is empty. Please record a valid audio file.`,
@@ -100,7 +103,7 @@ router.post(
 
         // Check minimum size (at least 1KB for a meaningful audio file)
         if (file.size < 1000) {
-          console.log(
+          voiceLogger.error(
             `❌ File ${i + 1} too small: ${file.originalname} (${
               file.size
             } bytes)`
@@ -113,8 +116,8 @@ router.post(
         }
 
         // Check maximum size (10MB)
-        if (file.size > 10 * 1024 * 1024) {
-          console.log(
+        if (file.size > 30 * 1024 * 1024) {
+          voiceLogger.error(
             `❌ File ${i + 1} too large: ${file.originalname} (${(
               file.size /
               1024 /
@@ -127,21 +130,21 @@ router.post(
               file.size /
               1024 /
               1024
-            ).toFixed(1)}MB). Maximum size is 10MB.`,
+            ).toFixed(1)}MB). Maximum size is 30MB.`,
             requestId,
           });
         }
       }
 
       // Step 3: Test ElevenLabs API connectivity
-      console.log(`🔍 Testing ElevenLabs API connectivity...`);
+      voiceLogger.info(`🔍 Testing ElevenLabs API connectivity...`);
 
       try {
         // Test API by listing voices (simple test)
         await elevenLabs.voices.getAll();
-        console.log(`✅ ElevenLabs API test successful`);
+        voiceLogger.info(`✅ ElevenLabs API test successful`);
       } catch (testError: any) {
-        console.log(`❌ ElevenLabs API test error:`, testError.message);
+        voiceLogger.error(`❌ ElevenLabs API test error:`, testError.message);
         return res.status(502).json({
           success: false,
           error: `Cannot connect to ElevenLabs: ${testError.message}`,
@@ -150,15 +153,15 @@ router.post(
       }
 
       // Step 4: Upload to ElevenLabs using SDK
-      console.log(`🚀 Starting ElevenLabs upload process...`);
+      voiceLogger.info(`🚀 Starting ElevenLabs upload process...`);
 
       try {
         // Prepare files for ElevenLabs SDK
-        console.log(`📤 Preparing ${files.length} files for ElevenLabs...`);
+        voiceLogger.info(`📤 Preparing ${files.length} files for ElevenLabs...`);
 
         files.forEach((file, index) => {
           const fileName = file.originalname || `recording-${index + 1}.m4a`;
-          console.log(
+          voiceLogger.info(
             `📄 File ${index + 1}: ${fileName}, size: ${file.size}, type: ${
               file.mimetype
             }`
@@ -166,7 +169,7 @@ router.post(
         });
 
         // Create voice clone using official ElevenLabs SDK
-        console.log(
+        voiceLogger.info(
           `📡 Calling ElevenLabs IVC create with ${files.length} files...`
         );
 
@@ -179,12 +182,12 @@ router.post(
           name: name.trim(),
         });
 
-        console.log(
+        voiceLogger.info(
           `✅ ElevenLabs upload successful, voice_id: ${elevenlabsResult.voiceId}`
         );
 
         if (!elevenlabsResult.voiceId) {
-          console.log(`❌ ElevenLabs upload failed:`, elevenlabsResult);
+          voiceLogger.error(`❌ ElevenLabs upload failed:`, elevenlabsResult);
           return res.status(502).json({
             success: false,
             error: `ElevenLabs error: ${elevenlabsResult}`,
@@ -193,7 +196,7 @@ router.post(
         }
 
         // Step 5: Save to database and increment usage
-        console.log(`💾 Saving to database...`);
+        voiceLogger.info(`💾 Saving to database...`);
 
         // Get existing voice clone if any
         const { data: existingVoiceClone } = await supabase
@@ -221,6 +224,7 @@ router.post(
             elevenlabs_voice_id: elevenlabsResult.voiceId,
             status: "ready",
             sample_files: files.map((f) => f.originalname),
+            name: name.trim(),
           });
 
           if (error) throw error;
@@ -229,7 +233,9 @@ router.post(
           await incrementResourceUsage(user.id, ResourceType.VOICE_CLONES);
         }
 
-        console.log(`✅ Voice clone saved to database for user ${user.id}`);
+        voiceLogger.info(
+          `✅ Voice clone saved to database for user ${user.id}`
+        );
 
         // Step 6: Send response
         return res.status(201).json({
@@ -239,7 +245,7 @@ router.post(
           requestId,
         });
       } catch (elevenLabsError: any) {
-        console.log(`❌ ElevenLabs SDK error:`, elevenLabsError);
+        voiceLogger.error(`❌ ElevenLabs SDK error:`, elevenLabsError);
         return res.status(502).json({
           success: false,
           error: `ElevenLabs error: ${elevenLabsError.message}`,
@@ -247,7 +253,7 @@ router.post(
         });
       }
     } catch (error: any) {
-      console.error(`❌ Voice clone request failed:`, error);
+      voiceLogger.error(`❌ Voice clone request failed:`, error);
 
       // Determine appropriate status code
       let statusCode = 500;
@@ -274,7 +280,7 @@ router.get("/samples/:voiceId", async (req, res) => {
   const requestId = `voice-samples-${Date.now()}`;
 
   try {
-    console.log(`🔍 Voice samples request started: ${requestId}`);
+    voiceLogger.info(`🔍 Voice samples request started: ${requestId}`);
 
     // Step 1: Authenticate user
     const authHeader = req.headers.authorization;
@@ -282,7 +288,7 @@ router.get("/samples/:voiceId", async (req, res) => {
       await ClerkAuthService.verifyUser(authHeader);
 
     if (authError || !user) {
-      console.log(`❌ Auth failed for request ${requestId}:`, authError);
+      voiceLogger.error(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }
 
@@ -313,15 +319,15 @@ router.get("/samples/:voiceId", async (req, res) => {
     }
 
     // Step 3: Get voice details from ElevenLabs
-    console.log(`📡 Fetching voice details from ElevenLabs: ${voiceId}`);
+    voiceLogger.info(`📡 Fetching voice details from ElevenLabs: ${voiceId}`);
 
     try {
       const voice = await elevenLabs.voices.get(voiceId);
 
-      console.log(
+      voiceLogger.info(
         `✅ Voice details retrieved: ${voice.samples?.length || 0} samples`
       );
-      console.log(
+      voiceLogger.info(
         `🔍 DEBUG samples structure:`,
         JSON.stringify(voice.samples, null, 2)
       );
@@ -332,7 +338,7 @@ router.get("/samples/:voiceId", async (req, res) => {
         requestId,
       });
     } catch (elevenLabsError: any) {
-      console.log(`❌ ElevenLabs API error:`, elevenLabsError.message);
+      voiceLogger.error(`❌ ElevenLabs API error:`, elevenLabsError.message);
       return res.status(502).json({
         success: false,
         error: `ElevenLabs error: ${elevenLabsError.message}`,
@@ -340,7 +346,7 @@ router.get("/samples/:voiceId", async (req, res) => {
       });
     }
   } catch (error: any) {
-    console.error(`❌ Voice samples request failed:`, error);
+    voiceLogger.error(`❌ Voice samples request failed:`, error);
     return res.status(500).json({
       success: false,
       error: error.message || "Internal server error",
@@ -357,7 +363,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
   const requestId = `voice-audio-url-${Date.now()}`;
 
   try {
-    console.log(`🔊 Voice audio URL request started: ${requestId}`);
+    voiceLogger.info(`🔊 Voice audio URL request started: ${requestId}`);
 
     // Step 1: Authenticate user (proper header auth)
     const authHeader = req.headers.authorization;
@@ -365,7 +371,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
       await ClerkAuthService.verifyUser(authHeader);
 
     if (authError || !user) {
-      console.log(`❌ Auth failed for request ${requestId}:`, authError);
+      voiceLogger.error(`❌ Auth failed for request ${requestId}:`, authError);
       return res.status(authError.status).json(authError);
     }
 
@@ -410,7 +416,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
       "host"
     )}/api/voice-clone/samples/${voiceId}/${sampleId}/audio?temp=${tempToken}`;
 
-    console.log(`✅ Generated temporary audio URL for ${sampleId}`);
+    voiceLogger.info(`✅ Generated temporary audio URL for ${sampleId}`);
 
     return res.status(200).json({
       success: true,
@@ -419,7 +425,7 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
       requestId,
     });
   } catch (error: any) {
-    console.error(`❌ Voice audio URL request failed:`, error);
+    voiceLogger.error(`❌ Voice audio URL request failed:`, error);
     return res.status(500).json({
       success: false,
       error: error.message || "Internal server error",
@@ -436,7 +442,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
   const requestId = `voice-sample-audio-${Date.now()}`;
 
   try {
-    console.log(`🔊 Voice sample audio request started: ${requestId}`);
+    voiceLogger.info(`🔊 Voice sample audio request started: ${requestId}`);
 
     const { voiceId, sampleId } = req.params;
     const tempToken = req.query.temp as string;
@@ -460,6 +466,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
 
     let tokenData;
     try {
+      //! TODO: Check if this is secure
       tokenData = JSON.parse(Buffer.from(tempToken, "base64").toString());
     } catch (err) {
       return res.status(401).json({
@@ -490,7 +497,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
     // Step 2: Stream audio from ElevenLabs
     const elevenLabsAudioUrl = `https://api.elevenlabs.io/v1/voices/${voiceId}/samples/${sampleId}/audio`;
 
-    console.log(`🔄 Streaming ElevenLabs audio: ${voiceId}/${sampleId}`);
+    voiceLogger.info(`🔄 Streaming ElevenLabs audio: ${voiceId}/${sampleId}`);
 
     try {
       const elevenLabsResponse = await fetch(elevenLabsAudioUrl, {
@@ -517,7 +524,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
       const buffer = Buffer.from(arrayBuffer);
       return res.send(buffer);
     } catch (elevenLabsError: any) {
-      console.log(`❌ ElevenLabs audio error:`, elevenLabsError.message);
+      voiceLogger.error(`❌ ElevenLabs audio error:`, elevenLabsError.message);
       return res.status(502).json({
         success: false,
         error: `ElevenLabs audio error: ${elevenLabsError.message}`,
@@ -525,7 +532,7 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
       });
     }
   } catch (error: any) {
-    console.error(`❌ Voice sample audio request failed:`, error);
+    voiceLogger.error(`❌ Voice sample audio request failed:`, error);
     return res.status(500).json({
       success: false,
       error: error.message || "Internal server error",
