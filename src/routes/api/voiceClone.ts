@@ -157,7 +157,9 @@ router.post(
 
       try {
         // Prepare files for ElevenLabs SDK
-        voiceLogger.info(`📤 Preparing ${files.length} files for ElevenLabs...`);
+        voiceLogger.info(
+          `📤 Preparing ${files.length} files for ElevenLabs...`
+        );
 
         files.forEach((file, index) => {
           const fileName = file.originalname || `recording-${index + 1}.m4a`;
@@ -213,6 +215,7 @@ router.post(
               elevenlabs_voice_id: elevenlabsResult.voiceId,
               status: "ready",
               sample_files: files.map((f) => f.originalname),
+              name: name.trim(),
             })
             .eq("id", existingVoiceClone.id);
 
@@ -537,6 +540,40 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
       success: false,
       error: error.message || "Internal server error",
       requestId,
+    });
+  }
+});
+
+router.get("/user-voices", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const { user, errorResponse } = await ClerkAuthService.verifyUser(
+      authHeader
+    );
+
+    if (errorResponse || !user) {
+      return res.status(errorResponse.status).json(errorResponse);
+    }
+    const { data, error } = await supabase
+      .from("voice_clones")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });
