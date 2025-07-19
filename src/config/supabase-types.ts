@@ -843,6 +843,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean | null
+          is_unlimited: boolean
           name: string
           source_videos_limit: number
           videos_generated_limit: number
@@ -854,6 +855,7 @@ export type Database = {
           description?: string | null
           id: string
           is_active?: boolean | null
+          is_unlimited?: boolean
           name: string
           source_videos_limit: number
           videos_generated_limit: number
@@ -865,6 +867,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean | null
+          is_unlimited?: boolean
           name?: string
           source_videos_limit?: number
           videos_generated_limit?: number
@@ -1120,11 +1123,13 @@ export type Database = {
           account_analysis_limit: number
           account_analysis_used: number
           created_at: string
+          current_plan_id: string
           id: string
           last_reset_date: string
           next_reset_date: string
           source_videos_limit: number
           source_videos_used: number
+          subscription_status: string | null
           token_limit: number | null
           tokens_used: number | null
           updated_at: string
@@ -1138,11 +1143,13 @@ export type Database = {
           account_analysis_limit?: number
           account_analysis_used?: number
           created_at?: string
+          current_plan_id?: string
           id?: string
           last_reset_date?: string
           next_reset_date?: string
           source_videos_limit?: number
           source_videos_used?: number
+          subscription_status?: string | null
           token_limit?: number | null
           tokens_used?: number | null
           updated_at?: string
@@ -1156,11 +1163,13 @@ export type Database = {
           account_analysis_limit?: number
           account_analysis_used?: number
           created_at?: string
+          current_plan_id?: string
           id?: string
           last_reset_date?: string
           next_reset_date?: string
           source_videos_limit?: number
           source_videos_used?: number
+          subscription_status?: string | null
           token_limit?: number | null
           tokens_used?: number | null
           updated_at?: string
@@ -1172,9 +1181,48 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "user_usage_current_plan_id_fkey"
+            columns: ["current_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_usage_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_voices: {
+        Row: {
+          created_at: string
+          elevenlabs_voice_id: string
+          id: string
+          user_id: string
+          voice_name: string
+        }
+        Insert: {
+          created_at?: string
+          elevenlabs_voice_id: string
+          id?: string
+          user_id: string
+          voice_name: string
+        }
+        Update: {
+          created_at?: string
+          elevenlabs_voice_id?: string
+          id?: string
+          user_id?: string
+          voice_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_voices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
