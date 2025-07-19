@@ -18,7 +18,7 @@ try {
   initializeEditiaCore({
     clerkSecretKey: process.env.CLERK_SECRET_KEY!,
     supabaseUrl: process.env.SUPABASE_URL!,
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY!,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
     environment: process.env.NODE_ENV as "development" | "production" | "test" || 'development'
   });
   logger.info("✅ Editia Core package initialized successfully");
