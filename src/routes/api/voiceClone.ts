@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { Readable } from "stream";
-import { ClerkAuthService } from "../../services/clerkAuthService";
+import { ClerkAuthService } from "editia-core";
 import { supabase } from "../../config/supabase";
 import { ElevenLabsClient, stream } from "@elevenlabs/elevenlabs-js";
 import {
@@ -292,7 +292,10 @@ router.get("/samples/:voiceId", async (req, res) => {
 
     if (authError || !user) {
       voiceLogger.error(`❌ Auth failed for request ${requestId}:`, authError);
-      return res.status(authError.status).json(authError);
+      return res.status(authError?.status || 401).json(authError || {
+        success: false,
+        error: "Authentication failed"
+      });
     }
 
     const { voiceId } = req.params;
@@ -375,7 +378,10 @@ router.post("/samples/:voiceId/:sampleId/audio-url", async (req, res) => {
 
     if (authError || !user) {
       voiceLogger.error(`❌ Auth failed for request ${requestId}:`, authError);
-      return res.status(authError.status).json(authError);
+      return res.status(authError?.status || 401).json(authError || {
+        success: false,
+        error: "Authentication failed"
+      });
     }
 
     const { voiceId, sampleId } = req.params;
@@ -545,35 +551,95 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
 });
 
 router.get("/user-voices", async (req, res) => {
+  const requestId = `user-voices-${Date.now()}`;
+  
   try {
+    voiceLogger.info(`🎤 User voices request started: ${requestId}`);
+    voiceLogger.info(`📡 Headers:`, {
+      authorization: req.headers.authorization ? 'Present' : 'Missing',
+      'user-agent': req.headers['user-agent'],
+      'content-type': req.headers['content-type']
+    });
+
+    // Use the editia-core package for authentication
     const authHeader = req.headers.authorization;
-    const { user, errorResponse } = await ClerkAuthService.verifyUser(
+    voiceLogger.info(`🔐 Attempting authentication with header: ${authHeader ? 'Present' : 'Missing'}`);
+    
+    const { user, clerkUser, errorResponse } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
     if (errorResponse || !user) {
-      return res.status(errorResponse.status).json(errorResponse);
+      voiceLogger.error(`❌ Authentication failed for request ${requestId}:`, {
+        errorResponse,
+        hasUser: !!user,
+        authHeader: authHeader ? 'Present' : 'Missing'
+      });
+      return res.status(errorResponse?.status || 401).json(errorResponse || {
+        success: false,
+        error: "User not found",
+        requestId
+      });
     }
+
+    // Log successful authentication for debugging
+    voiceLogger.info(`✅ User authenticated successfully:`, {
+      userId: user.id,
+      userEmail: user.email,
+      clerkUserId: clerkUser?.id,
+      requestId
+    });
+
+    // Query voice clones from Supabase
+    voiceLogger.info(`🗄️ Querying voice_clones table for user ${user.id}`);
+    
     const { data, error } = await supabase
       .from("voice_clones")
       .select("*")
       .eq("user_id", user.id);
 
     if (error) {
+      voiceLogger.error(`❌ Database error fetching voice clones:`, {
+        error: error.message,
+        errorCode: error.code,
+        errorDetails: error.details,
+        userId: user.id,
+        requestId
+      });
       return res.status(500).json({
         success: false,
         error: error.message,
+        requestId
       });
     }
+
+    voiceLogger.info(`✅ Database query successful:`, {
+      voiceClonesCount: data?.length || 0,
+      userId: user.id,
+      requestId,
+      voiceClones: data?.map(v => ({ id: v.id, name: v.name, elevenlabs_voice_id: v.elevenlabs_voice_id }))
+    });
 
     return res.status(200).json({
       success: true,
       data,
+      user: {
+        id: user.id,
+        email: user.email,
+        clerkId: clerkUser?.id
+      },
+      requestId
     });
   } catch (error: any) {
+    voiceLogger.error(`❌ User voices endpoint error:`, {
+      error: error.message,
+      stack: error.stack,
+      requestId
+    });
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || "Internal server error",
+      requestId
     });
   }
 });

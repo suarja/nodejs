@@ -8,9 +8,24 @@ import { testSupabaseConnection } from "./config/supabase";
 import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
 import { logger, logtail } from "./config/logger";
+import { initializeEditiaCore } from "editia-core";
 
 // Load environment variables
 dotenv.config();
+
+// Initialize Editia Core package
+try {
+  initializeEditiaCore({
+    clerkSecretKey: process.env.CLERK_SECRET_KEY!,
+    supabaseUrl: process.env.SUPABASE_URL!,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY!,
+    environment: process.env.NODE_ENV as "development" | "production" | "test" || 'development'
+  });
+  logger.info("✅ Editia Core package initialized successfully");
+} catch (error) {
+  logger.error("❌ Failed to initialize Editia Core package:", error);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
