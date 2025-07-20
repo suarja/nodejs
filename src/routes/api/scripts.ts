@@ -19,6 +19,7 @@ import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
 import { GuardAgentService } from "../../services/script/GuardAgentService";
 import { User } from "../../types/user";
+import { isMonetizationError, MonetizationError, parseMonetizationError } from "editia-core/dist/services/monetization/monetization-service";
 
 const scriptsLogger = logger.child({
   service: "scripts",
@@ -267,6 +268,14 @@ export async function scriptChatHandler(req: Request, res: Response) {
     return successResponseExpress(res, result);
   } catch (error) {
     scriptsLogger.error("❌ Script chat error:", error);
+    const monetizationError = isMonetizationError(error as Error);
+    if (monetizationError) {
+      return errorResponseExpress(
+        res,
+        (error as MonetizationError).message,
+        HttpStatus.FORBIDDEN
+      );
+    }
     return errorResponseExpress(
       res,
       "Failed to process chat message",

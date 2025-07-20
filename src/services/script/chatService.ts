@@ -16,7 +16,8 @@ import {
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
-import { MonetizationService } from "editia-core";
+import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES } from "editia-core";
+import { MonetizationError } from "editia-core/dist/services/monetization/monetization-service";
 
 /**
  * ScriptChatService - Handles conversational script generation
@@ -410,7 +411,7 @@ export class ScriptChatService {
         throw new Error("User usage not found");
       }
       if (userUsage.script_conversations_used >= userUsage.script_conversations_limit) {
-        throw new Error("Script conversations limit reached");
+        throw new MonetizationError("You have reached the maximum number of script conversations. Please upgrade to a paid plan to continue.", MONETIZATION_ERROR_CODES.USAGE_LIMIT_REACHED);
       }
 
       // Create new draft
