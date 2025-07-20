@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET_NAME } from "../../config/aws";
-import { ClerkAuthService } from "../../services/clerkAuthService";
 import { logger } from "../../config/logger";
+import { ClerkAuthService } from "editia-core";
 
 export async function uploadS3Handler(req: Request, res: Response) {
   try {

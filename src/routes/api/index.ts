@@ -1,5 +1,5 @@
 import express from "express";
-import { ClerkAuthService } from "../../services/clerkAuthService";
+import { authenticateUser } from "editia-core";
 import { uploadS3Handler } from "./s3Upload";
 import {
   videoAnalysisHandler,
@@ -33,6 +33,10 @@ import userManagementRouter from "./userManagement";
 
 const apiRouter = express.Router();
 
+// ============================================================================
+// PUBLIC ENDPOINTS (No authentication required)
+// ============================================================================
+
 // Health check endpoint
 apiRouter.get("/health", (req, res) => {
   res.json({
@@ -59,6 +63,8 @@ apiRouter.get("/auth-test", async (req, res) => {
       });
     }
 
+    // Use editia-core ClerkAuthService
+    const { ClerkAuthService } = await import("editia-core");
     const { user, clerkUser, errorResponse } =
       await ClerkAuthService.verifyUser(authHeader);
 
@@ -90,43 +96,6 @@ apiRouter.get("/auth-test", async (req, res) => {
     });
   }
 });
-
-// S3 upload endpoint (auth handled in the handler)
-apiRouter.post("/s3-upload", uploadS3Handler);
-
-// Video analysis endpoints (auth handled in the handlers)
-apiRouter.post("/video-analysis", videoAnalysisHandler);
-apiRouter.get("/video-analysis/health", videoAnalysisHealthHandler);
-
-// Video deletion endpoints (auth handled in the handlers)
-apiRouter.delete("/videos", videoDeleteHandler);
-apiRouter.get("/video-delete/health", videoDeleteHealthHandler);
-
-// Source videos endpoints (auth handled in the handlers)
-apiRouter.post("/source-videos", saveSourceVideoHandler);
-apiRouter.get("/source-videos", getSourceVideosHandler);
-apiRouter.put("/source-videos/:videoId", updateSourceVideoHandler);
-
-// Video generation endpoints (auth handled in the handlers)
-apiRouter.post(
-  "/videos/generate",
-  usageLimiter(ResourceType.VIDEOS_GENERATED),
-  generateVideoHandler
-);
-apiRouter.get("/videos/status/:id", getVideoStatusHandler);
-
-// Script chat endpoints (NEW)
-apiRouter.get("/scripts", getScriptDraftsHandler);
-apiRouter.get("/scripts/:id", getScriptDraftHandler);
-apiRouter.post("/scripts/chat", scriptChatHandler);
-apiRouter.post("/scripts/:id/validate", validateScriptHandler);
-apiRouter.delete("/scripts/:id", deleteScriptDraftHandler);
-apiRouter.post("/scripts/:id/duplicate", duplicateScriptDraftHandler);
-apiRouter.post("/scripts/generate-video/:id", generateVideoFromScriptHandler);
-apiRouter.post(
-  "/scripts/modify-current-script/:id",
-  modifyCurrentScriptHandler
-);
 
 // Test endpoint for streaming (NO AUTH)
 apiRouter.post("/test/streaming", async (req, res) => {
@@ -170,35 +139,76 @@ apiRouter.post("/test/streaming", async (req, res) => {
   }
 });
 
-// Prompt enhancement endpoints
-apiRouter.use("/prompts", promptsRouter);
-
-// Webhook endpoints
+// Webhook endpoints (typically don't require auth)
 apiRouter.use("/webhooks", webhooksRouter);
 
+// ============================================================================
+// AUTHENTICATED ENDPOINTS (Require authentication)
+// ============================================================================
+
+// Create authenticated router with middleware
+const authRoutes = express.Router();
+
+// Apply authentication middleware to all routes in this router
+authRoutes.use(authenticateUser);
+
+// S3 upload endpoint
+authRoutes.post("/s3-upload", uploadS3Handler);
+
+// Video analysis endpoints
+authRoutes.post("/video-analysis", videoAnalysisHandler);
+authRoutes.get("/video-analysis/health", videoAnalysisHealthHandler);
+
+// Video deletion endpoints
+authRoutes.delete("/videos", videoDeleteHandler);
+authRoutes.get("/video-delete/health", videoDeleteHealthHandler);
+
+// Source videos endpoints
+authRoutes.post("/source-videos", saveSourceVideoHandler);
+authRoutes.get("/source-videos", getSourceVideosHandler);
+authRoutes.put("/source-videos/:videoId", updateSourceVideoHandler);
+
+// Video generation endpoints
+authRoutes.post(
+  "/videos/generate",
+  usageLimiter(ResourceType.VIDEOS_GENERATED),
+  generateVideoHandler
+);
+authRoutes.get("/videos/status/:id", getVideoStatusHandler);
+
+// Script chat endpoints
+authRoutes.get("/scripts", getScriptDraftsHandler);
+authRoutes.get("/scripts/:id", getScriptDraftHandler);
+authRoutes.post("/scripts/chat", scriptChatHandler);
+authRoutes.post("/scripts/:id/validate", validateScriptHandler);
+authRoutes.delete("/scripts/:id", deleteScriptDraftHandler);
+authRoutes.post("/scripts/:id/duplicate", duplicateScriptDraftHandler);
+authRoutes.post("/scripts/generate-video/:id", generateVideoFromScriptHandler);
+authRoutes.post(
+  "/scripts/modify-current-script/:id",
+  modifyCurrentScriptHandler
+);
+
+// Prompt enhancement endpoints
+authRoutes.use("/prompts", promptsRouter);
+
 // Voice clone endpoints
-apiRouter.use("/voice-clone", voiceCloneRouter);
+authRoutes.use("/voice-clone", voiceCloneRouter);
 
 // Onboarding endpoints
-apiRouter.use("/onboarding", onboardingRouter);
+authRoutes.use("/onboarding", onboardingRouter);
 
 // Support endpoints
-apiRouter.use("/support", supportRouter);
+authRoutes.use("/support", supportRouter);
 
 // User management endpoints
-apiRouter.use("/user-management", userManagementRouter);
+authRoutes.use("/user-management", userManagementRouter);
 
-// List video requests endpoint (updated to use ClerkAuthService)
-apiRouter.get("/videos", async (req, res) => {
+// List video requests endpoint (simplified - no manual auth needed)
+authRoutes.get("/videos", async (req, res) => {
   try {
-    // Step 1: Authenticate user using ClerkAuthService
-    const authHeader = req.headers.authorization;
-    const { user, errorResponse: authError } =
-      await ClerkAuthService.verifyUser(authHeader);
-
-    if (authError) {
-      return res.status(authError.status).json(authError);
-    }
+    // User is already authenticated by middleware, available as req.user
+    const userId = req.user!.id;
 
     // Get the user's video requests (latest first)
     const { data: videoRequests, error } = await (
@@ -206,7 +216,7 @@ apiRouter.get("/videos", async (req, res) => {
     ).supabase
       .from("video_requests")
       .select("id, status, created_at, payload, result_data, error_message")
-      .eq("user_id", user!.id) // Use database user ID
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -230,5 +240,8 @@ apiRouter.get("/videos", async (req, res) => {
     });
   }
 });
+
+// Mount authenticated routes
+apiRouter.use("/", authRoutes);
 
 export default apiRouter;

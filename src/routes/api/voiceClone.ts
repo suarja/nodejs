@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { Readable } from "stream";
-import { ClerkAuthService } from "editia-core";
+import { authenticateUser, ClerkAuthService } from "editia-core";
 import { supabase } from "../../config/supabase";
 import { ElevenLabsClient, stream } from "@elevenlabs/elevenlabs-js";
 import {
@@ -550,32 +550,17 @@ router.get("/samples/:voiceId/:sampleId/audio", async (req, res) => {
   }
 });
 
-router.get("/user-voices", async (req, res) => {
+router.get("/user-voices",  async (req, res) => {
   const requestId = `user-voices-${Date.now()}`;
   
   try {
-    voiceLogger.info(`🎤 User voices request started: ${requestId}`);
-    voiceLogger.info(`📡 Headers:`, {
-      authorization: req.headers.authorization ? 'Present' : 'Missing',
-      'user-agent': req.headers['user-agent'],
-      'content-type': req.headers['content-type']
-    });
+    voiceLogger.info(`🎤 User voices request started: ${requestId}`)
 
-    // Use the editia-core package for authentication
-    const authHeader = req.headers.authorization;
-    voiceLogger.info(`🔐 Attempting authentication with header: ${authHeader ? 'Present' : 'Missing'}`);
-    
-    const { user, clerkUser, errorResponse } = await ClerkAuthService.verifyUser(
-      authHeader
-    );
+    const { user } = req;
 
-    if (errorResponse || !user) {
-      voiceLogger.error(`❌ Authentication failed for request ${requestId}:`, {
-        errorResponse,
-        hasUser: !!user,
-        authHeader: authHeader ? 'Present' : 'Missing'
-      });
-      return res.status(errorResponse?.status || 401).json(errorResponse || {
+    if (!user) {
+      voiceLogger.error(`❌ User not found`);
+      return res.status(401).json({
         success: false,
         error: "User not found",
         requestId
@@ -586,7 +571,7 @@ router.get("/user-voices", async (req, res) => {
     voiceLogger.info(`✅ User authenticated successfully:`, {
       userId: user.id,
       userEmail: user.email,
-      clerkUserId: clerkUser?.id,
+      clerkUserId: user.clerk_user_id,
       requestId
     });
 
@@ -626,7 +611,6 @@ router.get("/user-voices", async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        clerkId: clerkUser?.id
       },
       requestId
     });

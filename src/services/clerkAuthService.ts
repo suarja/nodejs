@@ -31,7 +31,7 @@ export class ClerkAuthService {
     authHeader?: string | null
   ): Promise<ClerkAuthResult> {
     logger.info(
-      "🔍 ClerkAuthService.verifyUser called with header:",
+      "🔍📈 ClerkAuthService.verifyUser called with header:",
       authHeader ? "Present" : "Missing"
     );
 

@@ -8,7 +8,7 @@ import { testSupabaseConnection } from "./config/supabase";
 import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
 import { logger, logtail } from "./config/logger";
-import { ClerkAuthService } from "editia-core";
+import { authenticateUser, ClerkAuthService } from "editia-core";
 
 // Load environment variables
 dotenv.config();

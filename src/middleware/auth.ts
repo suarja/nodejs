@@ -1,15 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import { ClerkAuthService } from "../services/clerkAuthService";
+import { logger } from "../config/logger";
+import { ClerkAuthService, DatabaseUser } from "editia-core";
 
 // Extend Express Request type to include user
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        email?: string;
-        [key: string]: any;
-      };
+      user?: DatabaseUser;
     }
   }
 }
@@ -21,14 +18,14 @@ export async function authenticateUser(
 ): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
-
+    logger.info(`🔐 Authenticating user with auth header: ${authHeader}`);
     // Use AuthService to verify user (matches mobile app implementation)
     const { user, errorResponse } = await ClerkAuthService.verifyUser(
       authHeader
     );
 
     if (errorResponse || !user) {
-      res.status(errorResponse.status).json(errorResponse);
+      res.status(errorResponse?.status || 500).json(errorResponse);
       return;
     }
 
@@ -36,6 +33,7 @@ export async function authenticateUser(
     req.user = {
       id: user.id,
       email: user.email || "",
+      clerk_user_id: user.clerk_user_id || "",
     };
 
     console.log(`🔐 User authenticated: ${user.email} (${user.id})`);
@@ -64,13 +62,14 @@ export async function optionalAuth(
     );
 
     if (errorResponse || !user) {
-      res.status(errorResponse.status).json(errorResponse);
+      res.status(errorResponse?.status || 500).json(errorResponse);
       return;
     }
 
     req.user = {
       id: user.id,
       email: user.email || "",
+      clerk_user_id: user.clerk_user_id || "",
     };
     console.log(`🔐 Optional auth successful: ${user.email} (${user.id})`);
 
