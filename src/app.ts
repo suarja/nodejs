@@ -8,14 +8,14 @@ import { testSupabaseConnection } from "./config/supabase";
 import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
 import { logger, logtail } from "./config/logger";
-import { initializeEditiaCore } from "editia-core";
+import { ClerkAuthService } from "editia-core";
 
 // Load environment variables
 dotenv.config();
 
 // Initialize Editia Core package
 try {
-  initializeEditiaCore({
+  ClerkAuthService.initialize({
     clerkSecretKey: process.env.CLERK_SECRET_KEY!,
     supabaseUrl: process.env.SUPABASE_URL!,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,

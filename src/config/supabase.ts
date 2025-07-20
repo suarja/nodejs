@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { Database } from "./supabase-types";
+import { Database } from "editia-core";
 
 // Load environment variables
 dotenv.config();
