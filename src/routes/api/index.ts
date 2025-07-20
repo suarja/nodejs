@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateUser } from "editia-core";
+import { authenticateUser, createUsageIncrementMiddleware, sourceVideoUploadMiddleware } from "editia-core";
 import { uploadS3Handler } from "./s3Upload";
 import {
   videoAnalysisHandler,
@@ -153,7 +153,7 @@ const authRoutes = express.Router();
 authRoutes.use(authenticateUser);
 
 // S3 upload endpoint
-authRoutes.post("/s3-upload", uploadS3Handler);
+authRoutes.post("/s3-upload",sourceVideoUploadMiddleware, createUsageIncrementMiddleware(),  uploadS3Handler);
 
 // Video analysis endpoints
 authRoutes.post("/video-analysis", videoAnalysisHandler);

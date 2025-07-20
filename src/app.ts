@@ -4,22 +4,27 @@ import dotenv from "dotenv";
 import cors from "cors";
 import indexRouter from "./routes/index";
 import apiRouter from "./routes/api";
-import { testSupabaseConnection } from "./config/supabase";
+import { supabase, testSupabaseConnection } from "./config/supabase";
 import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
 import { logger, logtail } from "./config/logger";
-import { authenticateUser, ClerkAuthService } from "editia-core";
+import { authenticateUser, ClerkAuthService, MonetizationService } from "editia-core";
 
 // Load environment variables
 dotenv.config();
 
+const environment = process.env.NODE_ENV as "development" | "production" | "test" || 'development';
 // Initialize Editia Core package
 try {
   ClerkAuthService.initialize({
     clerkSecretKey: process.env.CLERK_SECRET_KEY!,
     supabaseUrl: process.env.SUPABASE_URL!,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    environment: process.env.NODE_ENV as "development" | "production" | "test" || 'development'
+    environment
+  });
+  MonetizationService.initialize({
+    supabaseClient: supabase,
+    environment
   });
   logger.info("✅ Editia Core package initialized successfully");
 } catch (error) {
