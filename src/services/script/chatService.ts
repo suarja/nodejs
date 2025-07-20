@@ -16,6 +16,7 @@ import {
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
+import { MonetizationService } from "editia-core";
 
 /**
  * ScriptChatService - Handles conversational script generation
@@ -403,6 +404,15 @@ export class ScriptChatService {
 
       return draft as unknown as ScriptDraft;
     } else {
+      const monetizationService = MonetizationService.getInstance();
+      const userUsage = await monetizationService.getUserUsage(this.user.id);
+      if (!userUsage) {
+        throw new Error("User usage not found");
+      }
+      if (userUsage.script_conversations_used >= userUsage.script_conversations_limit) {
+        throw new Error("Script conversations limit reached");
+      }
+
       // Create new draft
       const { data: draft, error } = await supabase
         .from("script_drafts")
@@ -425,6 +435,8 @@ export class ScriptChatService {
       if (error || !draft) {
         throw new Error("Failed to create script draft");
       }
+
+      await monetizationService.incrementUsage(this.user.id, "script_conversations");
 
       return draft as unknown as ScriptDraft;
     }
