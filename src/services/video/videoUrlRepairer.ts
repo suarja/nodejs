@@ -153,7 +153,7 @@ export class VideoUrlRepairer {
    * Validates a scene plan against the original video list.
    * Throws an error if any URL is invalid.
    */
-  validateScenePlan(scenePlan: ScenePlan): void {
+  validateScenePlan(scenePlan: ScenePlan): ScenePlan {
     const validUrls = new Set(this.originalVideos.map((v) => v.upload_url));
     const invalidAssets: string[] = [];
 
@@ -171,6 +171,7 @@ export class VideoUrlRepairer {
         )}`
       );
     }
+    return scenePlan;
   }
 
   /**

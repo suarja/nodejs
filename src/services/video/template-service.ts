@@ -7,6 +7,9 @@ import type {
 import { CreatomateBuilder } from '../creatomateBuilder';
 import { logger } from '../../config/logger';
 import { ScenePlan, VideoType } from '../../types/video';
+import { videoValidationService } from './validation-service';
+import winston from 'winston';
+import { PromptService } from '../promptService';
 
 /**
  * Enhanced video template service that extends core functionality
@@ -82,7 +85,106 @@ export class VideoTemplateService {
   }
 
   /**
-   * Builds a Creatomate template with validation
+   * NEW: Main template generation method that orchestrates the entire flow
+   * Replaces logic from VideoGeneratorService.generateTemplate()
+   */
+  public async generateTemplate(
+    config: {
+      scriptText: string;
+      selectedVideos: VideoType[];
+      captionConfig: CaptionConfiguration;
+      editorialProfile: any;
+      voiceId: string;
+      outputLanguage: string;
+      systemPrompt?: string;
+      captionStructure?: any;
+    }
+  ): Promise<any> {
+    const processLogger = logger.child({ method: 'generateTemplate' });
+    
+    // Step 1: Validate inputs
+    const validation = await videoValidationService.validateInputConfiguration(
+      config.scriptText,
+      config.selectedVideos,
+      config.captionConfig
+    );
+
+    if (!validation.isValid) {
+      throw new Error(`Input validation failed: ${validation.errors.join(', ')}`);
+    }
+
+    processLogger.info('✅ Input validation passed');
+
+    // Step 2: Plan video structure
+    let scenePlan = await this.creatomateBuilder.planVideoStructure(
+      config.scriptText,
+      config.selectedVideos,
+      processLogger as winston.Logger
+    );
+
+    processLogger.info('✅ Video structure planned');
+
+
+    // Step 3: Validate and repair scene plan BEFORE building template
+    scenePlan = await videoValidationService.validateAndRepairScenePlan(
+      scenePlan,
+      config.selectedVideos,
+      config.scriptText,
+      processLogger as winston.Logger
+    );
+
+    processLogger.info('✅ Scene plan validated and repaired');
+
+    // Step 4: Generate template with validated scene plan
+      const agentPrompt = process.env.CREATOMATE_BUILDER_AGENT_PROMPT || "video-creatomate-agent-v4";
+
+          const promptTemplate = PromptService.fillPromptTemplate(agentPrompt, {
+        script: config.scriptText,
+        scenePlan,
+        voiceId: config.voiceId,
+        outputLanguage: config.outputLanguage,
+        captionInfo: config.captionConfig ? `Caption Config: ${JSON.stringify(config.captionConfig)}` : "",
+        systemPrompt: config.systemPrompt,
+        selectedVideos: config.selectedVideos,
+      });
+
+      if (!promptTemplate) {
+        throw new Error('Scene planner v5 prompt not found');
+      }
+
+    let template = await this.creatomateBuilder.generateTemplate({
+      script: config.scriptText,
+      selectedVideos: config.selectedVideos,
+      voiceId: config.voiceId,
+      editorialProfile: config.editorialProfile,
+      scenePlan: scenePlan,
+      captionStructure: config.captionStructure,
+      agentPrompt: promptTemplate.system,
+    });
+
+    processLogger.info('✅ Template generated');
+
+    // Step 5-7: Apply template fixes
+    this.creatomateBuilder.patchAudioTextToSource(template);
+    this.creatomateBuilder.fixTemplate(template);
+    this.creatomateBuilder.handleCaptionConfiguration(template, config.captionStructure);
+
+    processLogger.info('✅ Template fixes applied');
+
+    // Step 8: Final template validation
+    template = await videoValidationService.validateFinalTemplate(
+      template,
+      config.selectedVideos
+    );
+
+    processLogger.info('✅ Final template validation passed');
+
+    return template;
+  }
+
+  /**
+   * DEPRECATED: Use generateTemplate() instead
+   * Kept for backward compatibility during migration
    */
   public async buildTemplate(
     config: {
@@ -117,18 +219,9 @@ export class VideoTemplateService {
       warnings: validation.warnings
     });
 
-    // Build the Creatomate template using existing buildJson method
-    const template = await this.creatomateBuilder.buildJson({
-      script: config.scriptText,
-      selectedVideos: config.selectedVideos,
-      voiceId: config.voiceId,
-      editorialProfile: config.editorialProfile,
-      captionStructure: config.captionStructure,
-      agentPrompt: config.agentPrompt || '',
-      logger: logger
-    });
-
-    return template;
+    // DEPRECATED: This method should not be called anymore
+    // Use generateTemplate() instead
+    throw new Error('VideoTemplateService.buildTemplate is deprecated. Use generateTemplate() instead.');
   }
 
   /**

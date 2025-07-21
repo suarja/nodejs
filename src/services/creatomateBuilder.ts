@@ -50,7 +50,11 @@ export class CreatomateBuilder {
     }
   }
 
-  private async planVideoStructure(
+  /**
+   * Plan video structure with scene-by-scene breakdown
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  async planVideoStructure(
     script: string,
     selectedVideos: ValidatedVideo[],
     logger: winston.Logger
@@ -107,7 +111,11 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
     return response.output_parsed;
   }
 
-  private async generateTemplate(params: {
+  /**
+   * Generate Creatomate template from scene plan
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  async generateTemplate(params: {
     script: string;
     selectedVideos: any[];
     voiceId: string;
@@ -227,10 +235,12 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     return JSON.parse(completion.choices[0]?.message.content || "{}");
   }
 
+
   /**
    * Patch tous les éléments audio pour remplacer la clé 'text' par 'source' si besoin
+   * Now PUBLIC for VideoTemplateService to call directly
    */
-  private patchAudioTextToSource(template: any) {
+  patchAudioTextToSource(template: any) {
     if (!template || !template.elements || !Array.isArray(template.elements))
       return;
     template.elements.forEach((scene: any) => {
@@ -252,109 +262,15 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
   }
 
   /**
-   * Builds a Creatomate JSON template with enhanced caption support
+   * DEPRECATED: buildJson method removed
+   * Orchestration now handled by VideoTemplateService.generateTemplate()
+   * Individual methods are now public and called directly
    */
-  async buildJson(params: {
-    script: string;
-    selectedVideos: ValidatedVideo[];
-    voiceId: string;
-    editorialProfile: EditorialProfile;
-    captionStructure: any;
-    agentPrompt: string;
-    logger: winston.Logger;
-  }): Promise<any> {
-    params.logger.info("🚧 CreatomateBuilder.buildJson called with params:");
-    params.logger.info(
-      "Caption structure type:",
-      typeof params.captionStructure
-    );
-    params.logger.info(
-      "Caption structure content:",
-      JSON.stringify(params.captionStructure, null, 2)
-    );
 
-    const urlRepairer = new VideoUrlRepairer(
-      params.selectedVideos,
-      params.logger
-    );
-
-    // Step 1: Plan the video structure (scene-by-scene)
-    const scenePlan = await this.planVideoStructure(
-      params.script,
-      params.selectedVideos,
-      params.logger
-    );
-
-    // Step 2: Validate and repair the scene plan with an AI Judge
-    const repairedScenePlan = await urlRepairer.repairScenePlanWithAI(
-      scenePlan,
-      params.logger
-    );
-
-    // Step 3: Generate the Creatomate template
-    const template = await this.generateTemplate({
-      script: params.script,
-      selectedVideos: params.selectedVideos,
-      voiceId: params.voiceId,
-      editorialProfile: params.editorialProfile,
-      scenePlan: repairedScenePlan,
-      captionStructure: params.captionStructure,
-      agentPrompt: params.agentPrompt,
-    });
-
-    // Step 3.5: Patch audio elements (text -> source)
-    this.patchAudioTextToSource(template);
-
-    // Step 4: Final deterministic URL repair on the generated template
-    urlRepairer.repairTemplate(template);
-
-    // Step 5: Fix other template issues (e.g., video.fit)
-    this.fixTemplate(template);
-
-    // Step 6: Handle caption configuration (enhanced logic)
-    this.handleCaptionConfiguration(template, params.captionStructure);
-
-    // Step 7: Validate the template
-    this.validateTemplate(template);
-
-    // Log repair summary
-    const repairSummary = urlRepairer.getRepairSummary();
-    if (repairSummary.totalCorrections > 0) {
-      params.logger.info("📋 URL repairs completed:", repairSummary);
-      params.logger.info(
-        "📋 Detailed corrections:",
-        urlRepairer.getCorrections()
-      );
-    } else {
-      params.logger.info("✅ No URL repairs needed - all URLs were correct");
-    }
-
-    return template;
-  }
-
-  private validateTemplate(template: any) {
-    // Basic structure validation
-    if (
-      !template.output_format ||
-      !template.width ||
-      !template.height ||
-      !template.elements
-    ) {
-      throw new Error("Invalid template: Missing required properties");
-    }
-
-    // Validate dimensions for TikTok format
-    if (template.width !== 1080 || template.height !== 1920) {
-      throw new Error("Invalid template: Must be 1080x1920 for vertical video");
-    }
-
-    // Validate scenes
-    if (!Array.isArray(template.elements)) {
-      throw new Error("Invalid template: elements must be an array");
-    }
-
-    console.log("✅ Template validation passed");
-  }
+  /**
+   * DEPRECATED: validateTemplate method removed
+   * Validation now handled by VideoValidationService.validateTemplateStructure()
+   */
 
   /* A function to post process the template to fix the elements. Exactly the video.fit:
 
@@ -364,7 +280,11 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
 
 }
   */
-  private fixTemplate(template: any) {
+  /**
+   * Fix template properties like video.fit to 'cover'
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  fixTemplate(template: any) {
     // Fix the elements.video.fit to be cover and duration to be null
     template.elements.forEach((element: any) => {
       element.elements.forEach((element: any) => {
@@ -384,8 +304,9 @@ Source error: Video.fit: Expected one of these values: cover, contain, fill
 
   /**
    * Handle caption configuration with simplified logic
+   * Now PUBLIC for VideoTemplateService to call directly
    */
-  private handleCaptionConfiguration(template: any, captionConfig: any) {
+  handleCaptionConfiguration(template: any, captionConfig: any) {
     // If no caption config provided, apply default configuration
     console.log(
       "🚧 handleCaptionConfiguration called with captionConfig:",

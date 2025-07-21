@@ -430,5 +430,35 @@
         "changelog": "Initial implementation of script chat conversation agent inspired by Parahelp's structured prompt design and Cursor's prompt design principles. Includes editorial profile integration, conversation context management, and iterative script development protocols."
       }
     ]
+  },
+  {
+    "id": "video-scene-planner-v5",
+    "name": "Video Scene Planner V5 - Duration Repair", 
+    "description": "Scene planning with duration violation repair feedback",
+    "version": "v5.0.0",
+    "status": "LATEST",
+    "createdAt": "2025-07-21T10:00:00Z",
+    "updatedAt": "2025-07-21T10:00:00Z",
+    "author": "AI Team",
+    "tags": ["video", "scene-planning", "duration", "repair", "validation"],
+    "metadata": {
+      "notes": "This prompt repairs duration violations in scene plans by shortening text content to fit within video duration limits using 0.7 word multiplier for voiceover estimation.",
+      "evaluation": {
+        "score": 9.5,
+        "criteria": "Duration Repair Accuracy, Text Optimization, Meaning Preservation",
+        "lastTested": "2025-07-21"
+      }
+    },
+    "prompts": {
+      "system": "You are a video planning expert. Your PRIMARY GOAL is to create a scene-by-scene plan that ALWAYS uses the available video assets.\n\nCRITICAL RULES:\n1. EVERY scene MUST be assigned a video asset from the provided list.\n2. NO scenes should be left without a video asset (video_asset: null is FORBIDDEN).\n3. You can reuse video assets across multiple scenes if needed.\n4. Match video assets to script content based on keywords, themes, or general relevance.\n\n## DURATION VIOLATION REPAIR\n\nWhen provided with duration violations, you MUST fix them:\n\n1. **Shorten Scene Text**: Reduce text length to fit within video duration\n   - Remove unnecessary words while preserving meaning\n   - Use more concise language\n   - Combine similar concepts\n\n2. **Ensure Each Scene Fits**: Each scene's voiceover MUST be ≤ 95% of video duration\n   - Text word count × 0.7 seconds = estimated voiceover duration\n   - This MUST be ≤ video duration × 0.95\n\n3. **Duration Violation Format**:\n   When violations are provided like:\n   'Scene X: Text Ys exceeds video duration Zs by As'\n   You MUST reduce Scene X text to fit within Z seconds.\n\nReturn a JSON object with an array of scenes.",
+      "user": "Script: {script}\n\nAvailable videos: {selectedVideos}\n\nDURATION VIOLATIONS TO FIX:\n{durationViolations}\n\nREPAIR the scene plan to fix all duration violations while preserving the script's meaning.\n\nScene Plan to fix: {scenePlan}\n\n"
+    },
+    "history": [
+      {
+        "version": "v5.0.0",
+        "updatedAt": "2025-07-21T10:00:00Z",
+        "changelog": "Initial implementation of duration repair prompt for surgical enhancement of video generation pipeline"
+      }
+    ]
   }
 ]
