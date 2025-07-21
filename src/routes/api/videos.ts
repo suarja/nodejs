@@ -60,7 +60,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     }
 
     // Step 4: Generate video using the proper generator service
-    const videoGenerator = new VideoGeneratorService(user);
+    const videoGenerator = new VideoGeneratorService(user, videoGeneratorLogger);
     const result = await videoGenerator.generateVideo(validationResult.payload);
 
     // Increment usage *after* the request is successfully created
