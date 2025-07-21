@@ -16,8 +16,7 @@ import {
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
-import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES } from "editia-core";
-import { MonetizationError } from "editia-core/dist/services/monetization/monetization-service";
+import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError } from "editia-core";
 
 /**
  * ScriptChatService - Handles conversational script generation

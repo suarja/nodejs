@@ -19,7 +19,7 @@ import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
 import { GuardAgentService } from "../../services/script/GuardAgentService";
 import { User } from "../../types/user";
-import { isMonetizationError, MonetizationError, parseMonetizationError } from "editia-core/dist/services/monetization/monetization-service";
+import { isMonetizationError, MonetizationError, parseMonetizationError } from "editia-core";
 
 const scriptsLogger = logger.child({
   service: "scripts",
