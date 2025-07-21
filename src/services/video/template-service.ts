@@ -1,12 +1,12 @@
 import { VideoTemplateService as CoreVideoTemplateService } from 'editia-core';
 import type { 
-  VideoType, 
+  VideoType as CoreVideoType, 
   CaptionConfiguration,
   TemplateValidationResult
 } from 'editia-core';
 import { CreatomateBuilder } from '../creatomateBuilder';
 import { logger } from '../../config/logger';
-import { ScenePlan } from '../../types/video';
+import { ScenePlan, VideoType } from '../../types/video';
 
 /**
  * Enhanced video template service that extends core functionality
@@ -29,10 +29,21 @@ export class VideoTemplateService {
     captionConfig: CaptionConfiguration,
     scenePlan?: ScenePlan
   ): TemplateValidationResult {
+    // Convert server VideoType to core VideoType for validation
+    const coreVideos: CoreVideoType[] = selectedVideos.map(video => ({
+      id: video.id,
+      title: video.title,
+      description: video.description,
+      upload_url: video.upload_url,
+      tags: video.tags,
+      user_id: video.user_id,
+      duration_seconds: video.duration_seconds
+    }));
+
     // First run core validation
     const coreValidation = CoreVideoTemplateService.validateTemplate(
       scriptText,
-      selectedVideos,
+      coreVideos,
       captionConfig
     );
 

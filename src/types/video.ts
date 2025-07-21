@@ -18,8 +18,10 @@ import {
 // Re-export core types for backward compatibility
 export type CaptionConfiguration = CoreCaptionConfiguration;
 export type EditorialProfile = CoreEditorialProfile;
-// Extend VideoType to include server-specific fields but maintain base compatibility
-export interface VideoType extends CoreVideoType {
+// Extend VideoType to include server-specific fields but maintain base compatibility  
+export interface VideoType extends Omit<CoreVideoType, 'created_at' | 'updated_at' | 'id' | 'user_id'> {
+  id: string; // Server uses plain string IDs
+  user_id: string; // Server uses plain string user IDs
   analysis_data?: any; // Server-specific analysis data
   analysis_status?: CoreVideoRequestStatus;
   created_at?: string;
