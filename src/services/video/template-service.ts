@@ -31,13 +31,15 @@ export class VideoTemplateService {
   ): TemplateValidationResult {
     // Convert server VideoType to core VideoType for validation
     const coreVideos: CoreVideoType[] = selectedVideos.map(video => ({
-      id: video.id,
+      id: video.id as any, // Cast to branded type for core validation
       title: video.title,
       description: video.description,
-      upload_url: video.upload_url,
+      upload_url: video.upload_url || '', // Handle null upload_url
       tags: video.tags,
-      user_id: video.user_id,
-      duration_seconds: video.duration_seconds
+      user_id: video.user_id as any, // Cast to branded type for core validation  
+      duration_seconds: video.duration_seconds,
+      created_at: video.created_at || new Date().toISOString(),
+      updated_at: video.updated_at || new Date().toISOString()
     }));
 
     // First run core validation
