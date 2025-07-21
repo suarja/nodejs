@@ -52,11 +52,11 @@
           {
             "type": "command",
             "command": "afplay /Users/swarecito/App/2025/editia/.claude/song/finish.mp3"
-          },
-          {
-            "type": "command",
-            "command": "node /Users/swarecito/App/2025/editia/.claude/hooks/session-summary.js"
           }
+          // {
+          //   "type": "command",
+          //   "command": "node /Users/swarecito/App/2025/editia/.claude/hooks/session-summary.js"
+          // }
         ]
       }
     ],

@@ -17,6 +17,7 @@ import {
   VideoType,
 } from "../../types/video";
 import { VideoUrlRepairer } from "./videoUrlRepairer";
+import { videoTemplateService } from "./template-service";
 import winston from "winston";
 import { Database } from "../../config/supabase-types";
 import { VideoRequestStatus } from "../../types/video";
@@ -32,7 +33,7 @@ export class VideoGeneratorService {
   private user: User;
   private scriptGenerator: ScriptGenerator;
   private scriptReviewer: ScriptReviewer;
-  private creatomateBuilder: CreatomateBuilder;
+  private creatomateBuilder: CreatomateBuilder; // Keep for backward compatibility
   private logger: winston.Logger;
 
   // Timeout configurations
@@ -903,15 +904,16 @@ export class VideoGeneratorService {
         JSON.stringify(captionStructure, null, 2)
       );
 
-      // Generate template using CreatomateBuilder with prompt bank system
-      const template = await this.creatomateBuilder.buildJson({
-        script: script,
+      // Generate template using template service with validation
+      const template = await videoTemplateService.buildTemplate({
+        scriptText: script,
         selectedVideos: validatedVideos,
         voiceId,
         editorialProfile,
+        captionConfig,
+        outputLanguage,
         captionStructure,
         agentPrompt: promptTemplate?.system || "",
-        logger,
       });
 
       logger.info("✅ Creatomate template generated successfully");
