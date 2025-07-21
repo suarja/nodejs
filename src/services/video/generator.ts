@@ -388,21 +388,21 @@ export class VideoGeneratorService {
         payload;
 
       // Step 2: Fetch and validate videos
-      const videosObj = await this.withTimeout(
+      const validatedVideos = await this.withTimeout(
         this.fetchAndValidateVideos(selectedVideos),
         VideoGeneratorService.DATABASE_OPERATION_TIMEOUT,
         "Video validation timed out"
       );
 
       // Step 2.5: Create URL repairer for fixing AI-generated URLs
-      const urlRepairer = new VideoUrlRepairer(videosObj, logger);
+      const urlRepairer = new VideoUrlRepairer(validatedVideos, logger);
       this.logger.info("🔧 URL repairer initialized for video validation");
 
       // Step 3: Generate Creatomate template
       const template = await this.withTimeout(
         this.generateTemplate(
           script.reviewedScript,
-          videosObj,
+          validatedVideos,
           voiceId,
           editorialProfile,
           captionConfig,
@@ -737,6 +737,7 @@ export class VideoGeneratorService {
           generated_script: script,
           status: "validated",
           output_language: outputLanguage,
+          video_id: requestId,
         })
         .select()
         .single();
@@ -751,18 +752,18 @@ export class VideoGeneratorService {
         );
       }
 
-      await supabase
+    const {error: updateError} = await supabase
         .from("video_requests")
         .update({
           script_id: scriptRecord.id,
         })
         .eq("id", requestId);
 
-      if (scriptError) {
+      if (updateError) {
         throw VideoValidationService.createError(
           "Failed to save script to database",
           "SCRIPT_SAVE_ERROR",
-          { originalError: scriptError },
+          { originalError: updateError },
           true,
           "Failed to save the generated script. Please try again."
         );
