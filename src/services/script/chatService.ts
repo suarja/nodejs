@@ -16,9 +16,10 @@ import {
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
-import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError } from "editia-core";
+import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError, Database, TableRow, Tables } from "editia-core";
 import { Agent, run } from '@openai/agents';
 import { z } from "zod";
+import { logger } from "../../config/logger";
 
   const OutputSchema = z.object({
         script: z.string().describe("The script to be generated").nullable().optional(),
@@ -31,6 +32,32 @@ import { z } from "zod";
           nextSteps: z.string().describe("The next steps to be taken").nullable().optional(),
         }).nullable().optional(),
       });
+export const ComputedVideoSchema = z.object({
+  tiktok_video_id: z.string(),
+  video_url: z.string(),
+  description: z.string().optional(),
+  upload_date: z.string().optional(),
+  duration_seconds: z.number().optional(),
+  is_sponsored: z.boolean(),
+  is_ad: z.boolean(),
+  hashtags: z.array(z.string()),
+  music_info: z.any(),
+});
+
+      export const topVideoByMetricSchema = z.object({
+  by_views: z.array(z.object({
+    views: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+  by_likes: z.array(z.object({
+    likes: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+  by_engagement: z.array(z.object({
+    engagement_rate: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+});
 /**
  * ScriptChatService - Handles conversational script generation
  *
@@ -61,7 +88,7 @@ export class ScriptChatService {
       const [scriptDraftResult, editorialProfileResult, tiktokContextResult] = await Promise.allSettled([
         this.getOrCreateScriptDraft(request),
         this.getEditorialProfile(request.editorialProfileId),
-        request.scriptId ? this.getTikTokAnalysisContext(request.scriptId) : Promise.resolve(null)
+        request.scriptId ? this.getTikTokAnalysisContext(request.scriptId, this.user.id) : Promise.resolve(null)
       ]);
 
       // Check results and log appropriately
@@ -194,7 +221,7 @@ export class ScriptChatService {
       .single();
 
     if (tokensUsageError) {
-      this.logger.error("❌ Error fetching tokens usage:", tokensUsageError);
+      this.logger.warn("❌ Error fetching tokens usage:", tokensUsageError);
     }
 
     let newTokensUsed = 0;
@@ -252,7 +279,7 @@ export class ScriptChatService {
       // Get TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
+        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId, this.user.id);
       }
 
       // Step 3: Building context
@@ -975,24 +1002,16 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
    * Get TikTok analysis context for the user
    */
   private async getTikTokAnalysisContext(
-    scriptId: string
+    scriptId: string, 
+    user_id: string
   ): Promise<string | null> {
     try {
       this.logger.info("🎯 Getting TikTok analysis context...");
 
-      // First, find the account_id associated with this script draft or user
-      const { data: scriptDraft } = await supabase
-        .from("script_drafts")
-        .select("user_id")
-        .eq("id", scriptId)
-        .single();
-
-      if (!scriptDraft) return null;
-
       const { data: analysis } = await supabase
         .from("analyses")
         .select("account_id")
-        .eq("user_id", scriptDraft.user_id)
+        .eq("user_id", user_id)
         .eq("status", "completed")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -1003,36 +1022,9 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         return null;
       }
 
-      // ❗ REFACTORED: Fetch the full, comprehensive context via API call
-      const accountId = analysis.account_id;
-      const analyzerUrl =
-        process.env.ANALYZER_SERVICE_URL || "http://localhost:3001";
-      const response = await fetch(
-        `${analyzerUrl}/api/account-context/${accountId}`
-      );
+      const accountContext = await this.fetchTiktokAccountContext(analysis.account_id);
 
-      if (!response.ok) {
-        this.logger.warn(
-          `⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`
-        );
-        return null; // or fallback to a basic context
-      }
-
-      const fullContext: any = await response.json();
-
-      if (!fullContext || !fullContext.account) {
-        this.logger.warn(
-          `⚠️ Could not retrieve full context via API for account ${accountId}`
-        );
-        return null;
-      }
-
-      this.logger.info(
-        `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}, ${JSON.stringify(fullContext, null, 2)}`
-      );
-
-      // Format analysis context for the agent
-      return this.formatTikTokAnalysisContext(fullContext);
+        return this.formatTikTokAnalysisContext(accountContext);
     } catch (error) {
       this.logger.error("❌ Error fetching TikTok analysis context:", error);
       return null;
@@ -1042,14 +1034,14 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   /**
    * Format TikTok analysis for agent context
    */
-  private formatTikTokAnalysisContext(fullContext: any | null): string {
+  private formatTikTokAnalysisContext(fullContext: Awaited<ReturnType<typeof this.fetchTiktokAccountContext>> | null): string {
     if (!fullContext) {
       return `## 📱 ANALYSE TIKTOK\n\nL'analyse détaillée du compte n'est pas disponible pour le moment.`;
     }
 
     const { account, stats, aggregates, insights, top_videos } = fullContext;
 
-    let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
+    let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account?.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
 
     if (stats) {
       context += `\n### 📊 Données du compte\n- **Abonnés :** ${
@@ -1074,23 +1066,23 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
     if (insights) {
       if (insights.profile_summary) {
         context += `\n### 🎯 Profil & Audience (par l'IA)\n- **Niche:** ${
-          insights.profile_summary.niche || "Non définie"
+          (insights?.profile_summary as any)?.niche || "Non définie"
         }\n- **Audience:** ${
-          insights.profile_summary.audience_profile?.description || "Non défini"
+          (insights?.profile_summary as any)?.audience_profile?.description || "Non défini"
         }\n`;
       }
-      if (insights.content_analysis?.content_pillars) {
-        context += `\n### 🎨 Piliers de Contenu\n${insights.content_analysis.content_pillars
+      if ((insights as any)?.content_analysis?.content_pillars) {
+        context += `\n### 🎨 Piliers de Contenu\n${(insights as any)?.content_analysis.content_pillars
           .map((p: any) => `- **${p.name}**`)
           .join("\n")}\n`;
       }
-      if (insights.recommendations?.content_strategy) {
-        context += `\n### 🔥 Recommandation Stratégique Clé\n- ${insights.recommendations.content_strategy[0]?.action}\n`;
+      if ((insights as any)?.recommendations?.content_strategy) {
+        context += `\n### 🔥 Recommandation Stratégique Clé\n- ${(insights as any)?.recommendations.content_strategy[0]?.action}\n`;
       }
     }
 
     if (top_videos) {
-      context += `\n### 🎥 Vidéos les plus populaires\n${top_videos.map((v: any) => `- **${v.title}** (${v.views} vues)`).join("\n")}\n`;
+      context += `\n### 🎥 Vidéos les plus populaires\n${top_videos.map((v: any) => `- (${v.raw_transcription})`).join("\n")}\n`;
     }
 
     context += `\n---
@@ -1100,5 +1092,175 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
 - Propose des sujets alignés avec les piliers de contenu et la recommandation stratégique.`;
 
     return context;
+  }
+
+     async getAccountWithStats(accountId: string): Promise<{
+    account: TableRow<'accounts'>;
+    stats: TableRow<'accounts_stats'> | null;
+  } | null> {
+    try {
+      // Get account
+      const { data: account, error: accountError } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("id", accountId)
+        .single();
+
+      if (accountError) throw accountError;
+
+      // Get latest stats
+      const { data: stats, error: statsError } = await supabase
+        .from("accounts_stats")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("snapshot_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (statsError && statsError.code !== "PGRST116") {
+        throw statsError;
+      }
+
+      return {
+        account,
+        stats,
+      };
+    } catch (error) {
+      this.logger.error("❌ Failed to get account with stats:", error);
+      throw error;
+    }
+  }
+    /**
+   * Get account aggregates
+   */
+   async getAccountAggregates(
+    accountId: string, withTopVideos: boolean = false
+  ): Promise<
+    {accountAggregates: Tables<"accounts_aggregates"> | null, topVideos?: Tables<"tiktok_video_details">[] | null}
+  > {
+    try {
+      const { data, error } = await supabase
+        .from("accounts_aggregates")
+        .select("*")
+        .eq("account_id", accountId)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        logger.error("❌ Failed to get account aggregates:", error);
+        throw error;
+      }
+
+      if (withTopVideos) {
+        const rawTopVideos = topVideoByMetricSchema.safeParse(data?.top_videos);
+        const rawTopVideosIds = rawTopVideos.success ? rawTopVideos.data.by_views.map((video) => video.tiktok_video_id) : [];
+
+        const { data: tikTokVideos, error: tikTokVideosError } = await supabase
+          .from("tiktok_videos")
+          .select("id")
+          .in("tiktok_video_id", rawTopVideosIds)
+
+          if (tikTokVideosError) {
+            logger.error("❌ Failed to get tiktok videos:", tikTokVideosError);
+            throw tikTokVideosError;
+          }
+
+        const { data: topVideos, error: topVideosError } = await supabase
+          .from("tiktok_video_details")
+          .select("*")
+          .in("video_id", tikTokVideos.map((video) => video.id))
+          .order("last_scraped_at", { ascending: false })
+          .limit(10); 
+
+        if (topVideosError) {
+          logger.error("❌ Failed to get tiktok video details:", topVideosError);
+          throw topVideosError;
+        }
+
+        return {
+          accountAggregates: data,
+          topVideos: topVideos,
+        };
+
+      } else {  
+        return {
+          accountAggregates: data,
+        };
+      }
+    } catch (error) {
+      logger.error("❌ Failed to get account aggregates:", error);
+      throw error;
+    }
+  }
+
+    /**
+   * 🆕 Get the latest structured LLM insights for an account.
+   */
+   async getLatestLlmInsights(accountId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("accounts_llm_insights")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      logger.error("❌ Failed to get latest LLM insights:", error);
+      throw error;
+    }
+  }
+
+  async fetchTiktokAccountContext(accountId: string): Promise<{
+    account: TableRow<'accounts'> | null;
+    stats: TableRow<'accounts_stats'> | null;
+    aggregates: Tables<'accounts_aggregates'> | null;
+    top_videos: Tables<'tiktok_video_details'>[] | null;
+    insights: Tables<'accounts_llm_insights'> | null;
+  }> {
+    const [accountWithStats, accountAggregates, latestLlmInsights] = await Promise.allSettled([
+        this.getAccountWithStats(accountId),
+        this.getAccountAggregates(accountId, true),
+        this.getLatestLlmInsights(accountId),
+      ]);
+
+      let accountValue: TableRow<'accounts'> | null = null;
+      let accountStatsValue: TableRow<'accounts_stats'> | null = null;
+      let accountAggregatesValue: Tables<'accounts_aggregates'> | null = null;
+      let topVideosValue: Tables<'tiktok_video_details'>[] | null = null;
+      let latestLlmInsightsValue: Tables<'accounts_llm_insights'> | null = null;
+
+      if (accountWithStats.status === "fulfilled") {
+        accountValue = accountWithStats.value?.account || null;
+        accountStatsValue = accountWithStats.value?.stats || null;
+      } else {
+        this.logger.error("❌ Failed to get account with stats:", accountWithStats.reason);
+      }
+
+      if (accountAggregates.status === "fulfilled") {
+        accountAggregatesValue = accountAggregates.value?.accountAggregates || null;
+        topVideosValue = accountAggregates.value?.topVideos || null;
+      } else {
+        this.logger.error("❌ Failed to get account aggregates:", accountAggregates.reason);
+      }
+
+      if (latestLlmInsights.status === "fulfilled") {
+        latestLlmInsightsValue = latestLlmInsights.value;
+      } else {
+        this.logger.error("❌ Failed to get latest LLM insights:", latestLlmInsights.reason);
+      }
+
+      return {
+        account: accountValue,
+        stats: accountStatsValue,
+        aggregates: accountAggregatesValue,
+        top_videos: topVideosValue,
+        insights: latestLlmInsightsValue,
+      };
   }
 }
