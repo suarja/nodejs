@@ -17,7 +17,20 @@ import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
 import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError } from "editia-core";
+import { Agent, run } from '@openai/agents';
+import { z } from "zod";
 
+  const OutputSchema = z.object({
+        script: z.string().describe("The script to be generated").nullable().optional(),
+        hasScriptUpdate: z.boolean().describe("Whether the script has been updated"),
+        conversation: z.string().describe("The conversation history"),
+        metadata: z.object({
+          wordCount: z.number().describe("The word count of the script").nullable().optional(),
+          estimatedDuration: z.number().describe("The estimated duration of the script. The formula we use to estimate the rendering duration is: (wordCount* 0.7").nullable().optional(),
+          status: z.enum(["draft", "ready", "needs_work", "failed"]).describe("The status of the script").nullable().optional(),
+          nextSteps: z.string().describe("The next steps to be taken").nullable().optional(),
+        }).nullable().optional(),
+      });
 /**
  * ScriptChatService - Handles conversational script generation
  *
@@ -44,32 +57,21 @@ export class ScriptChatService {
    */
   async handleChat(request: ScriptChatRequest): Promise<ScriptChatResponse> {
     try {
-      this.logger.info(`💬 Processing chat for user ${this.user.id}`);
-      this.logger.info(`📝 Request message: ${request.message}`);
-      this.logger.info(`👑 User Pro status: ${request.isPro || false}`);
+
 
       // Get or create script draft
-      this.logger.info("🔄 Getting or creating script draft...");
       const scriptDraft = await this.getOrCreateScriptDraft(request);
-      this.logger.info(`✅ Script draft: ${scriptDraft.id}`);
 
       // Get editorial profile
-      this.logger.info("👤 Getting editorial profile...");
       const editorialProfile = await this.getEditorialProfile(
         request.editorialProfileId
       );
-      this.logger.info(`✅ Editorial profile loaded`);
 
       // Get editorial profile and TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        this.logger.info("📱 Getting TikTok analysis context...");
         tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
-        this.logger.info(
-          tiktokContext
-            ? "✅ TikTok analysis context loaded"
-            : "📭 No TikTok analysis available"
-        );
+        this.logger.info(`✅ TikTok context fetched: ${JSON.stringify(tiktokContext, null, 2)}`);
       } else {
         this.logger.info(
           "ℹ️ No scriptId provided, skipping TikTok context fetch"
@@ -77,50 +79,36 @@ export class ScriptChatService {
       }
 
       // Create conversation history
-      this.logger.info("💭 Building conversation history...");
-      const conversationHistory = this.buildConversationHistory(
+      const prompts = this.buildConversationHistoryForAgent(
         scriptDraft.messages,
         request.message,
         editorialProfile,
         tiktokContext
       );
-      this.logger.info(
-        `✅ Conversation history built: ${conversationHistory.length} messages`
-      );
 
       // Generate response with structured output
-      this.logger.info("🤖 Calling OpenAI with structured output...");
-      const completion = await this.openai.chat.completions.create({
+      // const completion = await this.openai.chat.completions.create({
+      //   model: this.model,
+      //   messages: conversationHistory,
+      //   temperature: 0.7,
+      //   max_tokens: 1000,
+      //   response_format: { type: "json_object" },
+      // });
+    
+      const agent = new Agent({
         model: this.model,
-        messages: conversationHistory,
-        temperature: 0.7,
-        max_tokens: 1000,
-        response_format: { type: "json_object" },
+        name: 'Script Chat Agent',
+        instructions: prompts.instructions,
+        outputType: OutputSchema,
       });
-      this.logger.info("✅ OpenAI response received");
-
-      const assistantMessage = completion.choices[0]?.message?.content;
-
-      const tokensUsed = completion.usage?.total_tokens;
-      this.logger.info(`💰 Tokens used: ${tokensUsed}`);
-      if (tokensUsed) {
-        await this.updateTokenUsage(tokensUsed);
-      }
-      if (!assistantMessage) {
-        throw new Error("No response generated from OpenAI");
-      }
-      this.logger.info(
-        `📝 Assistant message length: ${assistantMessage.length}`
+      const completion = await run(
+        agent,
+        [
+          { role: "user", content: prompts.userMessage },
+        ],
+     
       );
-
-      // Parse structured response
-      this.logger.info("🔍 Parsing structured response...");
-      const structuredResponse = this.parseStructuredResponse(assistantMessage);
-      this.logger.info(`✅ Structured response parsed:`, {
-        hasScript: !!structuredResponse.script,
-        hasScriptUpdate: structuredResponse.hasScriptUpdate,
-        conversationLength: structuredResponse.conversation.length,
-      });
+      this.logger.info(`✅ OpenAI response received: ${JSON.stringify(completion, null, 2)}`);
 
       // Create chat messages
       this.logger.info("💬 Creating chat messages...");
@@ -134,37 +122,31 @@ export class ScriptChatService {
       const assistantChatMessage: ChatMessage = {
         id: `msg_${Date.now()}_assistant`,
         role: "assistant",
-        content: structuredResponse.conversation, // Store only the conversation part
+        content: completion.finalOutput?.conversation || "", // Store only the conversation part
         timestamp: new Date().toISOString(),
         metadata: {
-          tokensUsed: completion.usage?.total_tokens,
-          model: this.model,
-          hasScriptUpdate: structuredResponse.hasScriptUpdate,
-          scriptStatus: structuredResponse.metadata?.status,
-        },
+          hasScriptUpdate: completion.finalOutput?.hasScriptUpdate || false,
+          scriptStatus: completion.finalOutput?.metadata?.status || "draft",
+        }
       };
 
-      // Determine script to save (use existing if no update)
-      const scriptToSave =
-        structuredResponse.hasScriptUpdate && structuredResponse.script
-          ? structuredResponse.script
-          : scriptDraft.current_script;
+      const scriptToSave = completion.finalOutput?.script || scriptDraft.current_script;
 
       // Update script draft
-      this.logger.info("💾 Updating script draft...");
       const updatedDraft = await this.updateScriptDraft(
         scriptDraft.id,
         scriptToSave,
-        [userMessage, assistantChatMessage]
+        [userMessage, assistantChatMessage],
+        scriptDraft.title 
       );
       this.logger.info("✅ Script draft updated successfully");
 
       // Track script version for improvement analytics
-      if (structuredResponse.hasScriptUpdate && structuredResponse.script) {
+      if (completion.finalOutput?.hasScriptUpdate && completion.finalOutput?.script) {
         await this.trackScriptVersion(
           scriptDraft.id,
           scriptDraft.current_script, // previous version
-          structuredResponse.script, // new version
+          completion.finalOutput?.script, // new version
           request.message,
           editorialProfile
         );
@@ -178,9 +160,9 @@ export class ScriptChatService {
         metadata: {
           wordCount: updatedDraft.word_count,
           estimatedDuration: updatedDraft.estimated_duration,
-          hasScriptUpdate: structuredResponse.hasScriptUpdate,
-          scriptStatus: structuredResponse.metadata?.status,
-          nextSteps: structuredResponse.metadata?.nextSteps,
+          hasScriptUpdate: completion.finalOutput?.hasScriptUpdate,
+          scriptStatus: completion.finalOutput?.metadata?.status || "draft",
+          nextSteps: completion.finalOutput?.metadata?.nextSteps || "No next steps",
         },
       };
     } catch (error) {
@@ -448,14 +430,17 @@ export class ScriptChatService {
   private async updateScriptDraft(
     scriptId: string,
     newScript: string,
-    newMessages: ChatMessage[]
+    newMessages: ChatMessage[],
+    title?: string,
   ): Promise<ScriptDraft> {
     // Calculate metadata
     const wordCount = newScript.split(/\s+/).length;
     const estimatedDuration = estimateScriptDuration(newScript);
-
+    let newTitle = title;
+    if (!title) {
     // Generate intelligent title from first user message or script content
-    const title = await this.generateIntelligentTitle(newMessages, newScript);
+     newTitle = await this.generateIntelligentTitle(newMessages, newScript);
+    }
 
     // Get current draft to merge messages
     const { data: currentDraft, error: fetchError } = await supabase
@@ -477,7 +462,7 @@ export class ScriptChatService {
     const { data: updatedDraft, error } = await supabase
       .from("script_drafts")
       .update({
-        title,
+        title: newTitle,
         current_script: newScript,
         messages: allMessages as unknown as Json[],
         word_count: wordCount,
@@ -536,6 +521,41 @@ export class ScriptChatService {
     };
   }
 
+  /**
+   * Build conversation history for OpenAI using structured prompt design
+   */
+  private buildConversationHistoryForAgent(
+    previousMessages: ChatMessage[],
+    currentMessage: string,
+    editorialProfile: any,
+    tiktokContext?: string | null
+  ): {
+    instructions: string;
+    userMessage: string;
+  } {
+    // Get the structured prompt from prompt bank
+    const promptTemplate = PromptService.fillPromptTemplate(
+      "script-chat-conversation-agent",
+      {
+        messageHistory: this.formatMessageHistory(previousMessages),
+        currentMessage: currentMessage,
+        editorialProfile: this.formatEditorialProfile(editorialProfile),
+        outputLanguage: "fr", // Default to French, should be passed from request
+        currentScript: this.getCurrentScriptFromMessages(previousMessages),
+        tiktokAnalysis:
+          tiktokContext || "Aucune analyse TikTok disponible pour ce compte.",
+      }
+    );
+
+    if (!promptTemplate) {
+      this.logger.warn(
+        "⚠️ Script chat prompt template not found, using fallback"
+      );
+      throw new Error("Script chat prompt template not found");
+    }
+
+    return {instructions: promptTemplate.system, userMessage: promptTemplate.user};
+  }
   /**
    * Build conversation history for OpenAI using structured prompt design
    */
@@ -605,6 +625,12 @@ export class ScriptChatService {
   private formatMessageHistory(messages: ChatMessage[]): string {
     if (!messages || messages.length === 0) {
       return "No previous messages - this is the start of a new conversation.";
+    }
+    if (messages.length > 10) {
+      return messages.slice(0, 10).map((msg) => {
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        return `[${timestamp}] ${msg.role.toUpperCase()}: ${msg.content}`;
+      }).join("\n\n");
     }
 
     return messages
@@ -1007,7 +1033,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       return `## 📱 ANALYSE TIKTOK\n\nL'analyse détaillée du compte n'est pas disponible pour le moment.`;
     }
 
-    const { account, stats, aggregates, insights } = fullContext;
+    const { account, stats, aggregates, insights, top_videos } = fullContext;
 
     let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
 
@@ -1047,6 +1073,10 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       if (insights.recommendations?.content_strategy) {
         context += `\n### 🔥 Recommandation Stratégique Clé\n- ${insights.recommendations.content_strategy[0]?.action}\n`;
       }
+    }
+
+    if (top_videos) {
+      context += `\n### 🎥 Vidéos les plus populaires\n${top_videos.map((v: any) => `- **${v.title}** (${v.views} vues)`).join("\n")}\n`;
     }
 
     context += `\n---

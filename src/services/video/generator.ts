@@ -301,25 +301,25 @@ export class VideoGeneratorService {
         requestId
       ).catch((error) => logger.warn("Training data storage failed:", error));
 
-      // Step 4: Start Creatomate render
-      const renderId = await this.withTimeout(
-        this.startCreatomateRender(
-          template,
-          requestId,
-          scriptDraft.id,
-          `Video from script: ${scriptDraft.title}`
-        ),
-        VideoGeneratorService.CREATOMATE_API_TIMEOUT,
-        "Creatomate render start timed out"
-      );
+      // // Step 4: Start Creatomate render
+      // const renderId = await this.withTimeout(
+      //   this.startCreatomateRender(
+      //     template,
+      //     requestId,
+      //     scriptDraft.id,
+      //     `Video from script: ${scriptDraft.title}`
+      //   ),
+      //   VideoGeneratorService.CREATOMATE_API_TIMEOUT,
+      //   "Creatomate render start timed out"
+      // );
 
-      // Step 5: Update video request with completion
-      await this.updateVideoRequestWithResults(requestId, {
-        scriptId: scriptDraft.id,
-        renderId,
-        script: scriptDraft.current_script,
-        template,
-      });
+      // // Step 5: Update video request with completion
+      // await this.updateVideoRequestWithResults(requestId, {
+      //   scriptId: scriptDraft.id,
+      //   renderId,
+      //   script: scriptDraft.current_script,
+      //   template,
+      // });
 
       const duration = Date.now() - startTime;
       logger.info(

@@ -13,6 +13,7 @@
     "@google/genai": "^1.8.0",
     "@logtail/node": "^0.5.5",
     "@logtail/winston": "^0.5.5",
+    "@openai/agents": "^0.0.12",
     "@supabase/supabase-js": "^2.50.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
@@ -22,7 +23,7 @@
     "multer": "^2.0.1",
     "openai": "^5.1.1",
     "winston": "^3.17.0",
-    "zod": "^3.25.56"
+    "zod": "<=3.25.67"
   },
   "devDependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
