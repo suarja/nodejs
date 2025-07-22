@@ -17,7 +17,7 @@
     "axios": "^1.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "editia-core": "^1.9.4",
+    "editia-core": "^1.9.5",
     "express": "^4.19.2",
     "multer": "^2.0.1",
     "openai": "^5.1.1",
