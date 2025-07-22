@@ -57,25 +57,37 @@ export class ScriptChatService {
    */
   async handleChat(request: ScriptChatRequest): Promise<ScriptChatResponse> {
     try {
+      // Use Promise.allSettled to handle concurrent requests
+      const [scriptDraftResult, editorialProfileResult, tiktokContextResult] = await Promise.allSettled([
+        this.getOrCreateScriptDraft(request),
+        this.getEditorialProfile(request.editorialProfileId),
+        request.scriptId ? this.getTikTokAnalysisContext(request.scriptId) : Promise.resolve(null)
+      ]);
 
+      // Check results and log appropriately
+      if (scriptDraftResult.status === "fulfilled") {
+        var scriptDraft = scriptDraftResult.value;
+      } else {
+        this.logger.error("❌ Failed to get or create script draft:", scriptDraftResult.reason);
+        throw new Error("Failed to get or create script draft");
+      }
 
-      // Get or create script draft
-      const scriptDraft = await this.getOrCreateScriptDraft(request);
+      if (editorialProfileResult.status === "fulfilled") {
+        var editorialProfile = editorialProfileResult.value;
+      } else {
+        this.logger.error("❌ Failed to get editorial profile:", editorialProfileResult.reason);
+        throw new Error("Failed to get editorial profile");
+      }
 
-      // Get editorial profile
-      const editorialProfile = await this.getEditorialProfile(
-        request.editorialProfileId
-      );
-
-      // Get editorial profile and TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
-        this.logger.info(`✅ TikTok context fetched: ${JSON.stringify(tiktokContext, null, 2)}`);
+        if (tiktokContextResult.status === "fulfilled") {
+          tiktokContext = tiktokContextResult.value;
+        } else {
+          this.logger.warn("⚠️ Failed to fetch TikTok context:", tiktokContextResult.reason);
+        }
       } else {
-        this.logger.info(
-          "ℹ️ No scriptId provided, skipping TikTok context fetch"
-        );
+        this.logger.info("ℹ️ No scriptId provided, skipping TikTok context fetch");
       }
 
       // Create conversation history
@@ -86,15 +98,6 @@ export class ScriptChatService {
         tiktokContext
       );
 
-      // Generate response with structured output
-      // const completion = await this.openai.chat.completions.create({
-      //   model: this.model,
-      //   messages: conversationHistory,
-      //   temperature: 0.7,
-      //   max_tokens: 1000,
-      //   response_format: { type: "json_object" },
-      // });
-    
       const agent = new Agent({
         model: this.model,
         name: 'Script Chat Agent',
@@ -108,10 +111,8 @@ export class ScriptChatService {
         ],
      
       );
-      this.logger.info(`✅ OpenAI response received: ${JSON.stringify(completion, null, 2)}`);
 
       // Create chat messages
-      this.logger.info("💬 Creating chat messages...");
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
         role: "user",
@@ -133,33 +134,47 @@ export class ScriptChatService {
       const scriptToSave = completion.finalOutput?.script || scriptDraft.current_script;
 
       // Update script draft
-      const updatedDraft = await this.updateScriptDraft(
-        scriptDraft.id,
-        scriptToSave,
-        [userMessage, assistantChatMessage],
-        scriptDraft.title 
-      );
-      this.logger.info("✅ Script draft updated successfully");
-
-      // Track script version for improvement analytics
-      if (completion.finalOutput?.hasScriptUpdate && completion.finalOutput?.script) {
-        await this.trackScriptVersion(
+      const [updateDraftResult, trackVersionResult, updateTokenUsageResult] = await Promise.allSettled([
+        this.updateScriptDraft(
           scriptDraft.id,
-          scriptDraft.current_script, // previous version
-          completion.finalOutput?.script, // new version
-          request.message,
-          editorialProfile
-        );
+          scriptToSave,
+          [userMessage, assistantChatMessage],
+          scriptDraft.title
+        ),
+        completion.finalOutput?.hasScriptUpdate && completion.finalOutput?.script
+          ? this.trackScriptVersion(
+              scriptDraft.id,
+              scriptDraft.current_script, // previous version
+              completion.finalOutput?.script, // new version
+              request.message,
+              editorialProfile
+            )
+          : Promise.resolve(),
+        this.updateTokenUsage(completion.state._context.usage.totalTokens)
+      ]);
+
+      if (updateDraftResult.status === "fulfilled") {
+        this.logger.info("✅ Script draft updated successfully");
+      } else {
+        this.logger.error("❌ Failed to update script draft:", updateDraftResult.reason);
+      }
+
+      if (trackVersionResult.status === "rejected") {
+        this.logger.error("❌ Failed to track script version:", trackVersionResult.reason);
+      }
+
+      if (updateTokenUsageResult.status === "rejected") {
+        this.logger.warn("❌ Failed to update token usage:", updateTokenUsageResult.reason);
       }
 
       this.logger.info("📤 Returning response...");
       return {
-        scriptId: updatedDraft.id,
+        scriptId: scriptDraft.id,
         message: assistantChatMessage,
         currentScript: scriptToSave,
         metadata: {
-          wordCount: updatedDraft.word_count,
-          estimatedDuration: updatedDraft.estimated_duration,
+          wordCount: scriptDraft.word_count,
+          estimatedDuration: scriptDraft.estimated_duration,
           hasScriptUpdate: completion.finalOutput?.hasScriptUpdate,
           scriptStatus: completion.finalOutput?.metadata?.status || "draft",
           nextSteps: completion.finalOutput?.metadata?.nextSteps || "No next steps",
@@ -1013,12 +1028,11 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
       }
 
       this.logger.info(
-        `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`
+        `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}, ${JSON.stringify(fullContext, null, 2)}`
       );
 
       // Format analysis context for the agent
-      const context = this.formatTikTokAnalysisContext(fullContext);
-      return context;
+      return this.formatTikTokAnalysisContext(fullContext);
     } catch (error) {
       this.logger.error("❌ Error fetching TikTok analysis context:", error);
       return null;
