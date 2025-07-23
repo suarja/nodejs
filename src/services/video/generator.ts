@@ -418,24 +418,24 @@ export class VideoGeneratorService {
       ).catch((error) => this.logger.warn("Training data storage failed:", error));
 
       // Step 5: Start Creatomate render
-      const renderId = await this.withTimeout(
-        this.startCreatomateRender(
-          template,
-          requestId,
-          script.scriptId,
-          prompt
-        ),
-        VideoGeneratorService.CREATOMATE_API_TIMEOUT,
-        "Creatomate render start timed out"
-      );
+      // const renderId = await this.withTimeout(
+      //   this.startCreatomateRender(
+      //     template,
+      //     requestId,
+      //     script.scriptId,
+      //     prompt
+      //   ),
+      //   VideoGeneratorService.CREATOMATE_API_TIMEOUT,
+      //   "Creatomate render start timed out"
+      // );
 
-      // Step 6: Update video request with completion
-      await this.updateVideoRequestWithResults(requestId, {
-        scriptId: script.scriptId,
-        renderId,
-        script: script.reviewedScript,
-        template,
-      });
+      // // Step 6: Update video request with completion
+      // await this.updateVideoRequestWithResults(requestId, {
+      //   scriptId: script.scriptId,
+      //   renderId,
+      //   script: script.reviewedScript,
+      //   template,
+      // });
 
       const duration = Date.now() - startTime;
         this.logger.info(

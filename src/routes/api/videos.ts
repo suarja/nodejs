@@ -51,6 +51,7 @@ export async function generateVideoHandler(req: Request, res: Response) {
     const validationResult =
       VideoValidationService.validateRequest(requestBody);
     if (!validationResult.success) {
+      videoGeneratorLogger.error("❌ Validation error:", validationResult.error);
       return errorResponseExpress(
         res,
         validationResult.error.message,

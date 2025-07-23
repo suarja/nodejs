@@ -703,7 +703,6 @@ export async function generateVideoFromScriptHandler(
       validationResult.payload,
       generateVideoFromScriptHandlerLogger
     );
-    await incrementResourceUsage(user!.id, ResourceType.VIDEOS_GENERATED);
 
     generateVideoFromScriptHandlerLogger.info(
       "✅ Video generation from script initiated successfully"

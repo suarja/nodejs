@@ -2,6 +2,8 @@ import { Router, Request, Response } from "express";
 import { supabase } from "../../config/supabase";
 import { successResponseExpress } from "../../utils/api/responses";
 import { logger } from "../../config/logger";
+import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
+import { ResourceType } from "../../types/ressource";
 
 const router = Router();
 
@@ -116,6 +118,8 @@ router.post("/creatomate", async (req: Request, res: Response) => {
         render_url: webhookData.url,
         render_duration: webhookData.duration,
       };
+    await incrementResourceUsage(userId, ResourceType.VIDEOS_GENERATED);
+
       creatomateWebhookChildLogger.info(
         `✅ Render succeeded for request ${requestId}, URL: ${webhookData.url}`
       );
