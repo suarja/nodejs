@@ -64,8 +64,6 @@ export async function generateVideoHandler(req: Request, res: Response) {
     const videoGenerator = new VideoGeneratorService(user, videoGeneratorLogger);
     const result = await videoGenerator.generateVideo(validationResult.payload);
 
-    // Increment usage *after* the request is successfully created
-    await incrementResourceUsage(user.id, ResourceType.VIDEOS_GENERATED);
 
     videoGeneratorLogger.info("✅ Video generation process initiated successfully");
 
