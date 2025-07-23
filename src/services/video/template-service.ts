@@ -10,6 +10,7 @@ import { ScenePlan, VideoType } from '../../types/video';
 import { videoValidationService } from './validation-service';
 import winston from 'winston';
 import { PromptService } from '../promptService';
+import { MODELS } from '../../config/openai';
 
 /**
  * Enhanced video template service that extends core functionality
@@ -19,7 +20,7 @@ export class VideoTemplateService {
   private creatomateBuilder: CreatomateBuilder;
 
   constructor() {
-    this.creatomateBuilder = CreatomateBuilder.getInstance('gpt-4');
+    this.creatomateBuilder = CreatomateBuilder.getInstance(MODELS["4.1"]);
   }
 
   /**

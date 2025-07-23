@@ -4,7 +4,7 @@ import { VideoTemplateService as CoreVideoTemplateService } from 'editia-core';
 import { logger } from '../../config/logger';
 import winston from 'winston';
 import { PromptService } from '../promptService';
-import { createOpenAIClient } from '../../config/openai';
+import { createOpenAIClient, MODELS } from '../../config/openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { ScenePlanSchema } from '../../types/video';
 import OpenAI from 'openai';
@@ -25,7 +25,7 @@ export class VideoValidationService {
   private openai: OpenAI;
   private model: string;
 
-  constructor(model: string = 'gpt-4') {
+  constructor(model: string = MODELS["4.1"]) {
     this.openai = createOpenAIClient();
     this.model = model;
   }
