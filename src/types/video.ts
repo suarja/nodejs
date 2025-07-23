@@ -79,8 +79,8 @@ export type ValidatedVideo = VideoType;
 export const VideoRequestStatus = {
   QUEUED: CoreVideoRequestStatus.QUEUED,
   RENDERING: CoreVideoRequestStatus.PROCESSING,
-  COMPLETED: CoreVideoRequestStatus.COMPLETED,
-  FAILED: CoreVideoRequestStatus.FAILED,
+  DONE: CoreVideoRequestStatus.COMPLETED,
+  ERROR: CoreVideoRequestStatus.FAILED,
 } as const;
 
 export type VideoRequestStatus = CoreVideoRequestStatus;

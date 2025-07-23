@@ -205,7 +205,7 @@ export async function getVideoStatusHandler(req: Request, res: Response) {
             const { error: updateError } = await supabase
               .from("video_requests")
               .update({
-                render_status: VideoRequestStatus.COMPLETED,
+                render_status: VideoRequestStatus.DONE,
                 render_url: renderData.url,
                 snapshot_url: renderData.snapshot_url,
               })

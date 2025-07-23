@@ -335,7 +335,7 @@ export class VideoGeneratorService {
       // Update request with failure status
       await this.updateVideoRequestStatus(
         requestId,
-        VideoRequestStatus.FAILED,
+        VideoRequestStatus.ERROR,
         error instanceof Error
           ? error.message
           : "Unknown error during processing"
@@ -451,7 +451,7 @@ export class VideoGeneratorService {
       // Update request with failure status
       await this.updateVideoRequestStatus(
         requestId,
-        VideoRequestStatus.FAILED,
+          VideoRequestStatus.ERROR,
         error instanceof Error
           ? error.message
           : "Unknown error during processing"
@@ -586,9 +586,9 @@ export class VideoGeneratorService {
 
       if (status === VideoRequestStatus.RENDERING) {
         updateData.processing_started_at = new Date().toISOString();
-      } else if (status === VideoRequestStatus.COMPLETED) {
+      } else if (status === VideoRequestStatus.DONE) {
         updateData.completed_at = new Date().toISOString();
-      } else if (status === VideoRequestStatus.FAILED && errorMessage) {
+      } else if (status === VideoRequestStatus.ERROR && errorMessage) {
         this.logger.warn("Failed to update video request status:", errorMessage);
         updateData.error_message = errorMessage || "Unknown error";
       }
