@@ -34,6 +34,7 @@ export class VideoTemplateService {
     this.creatomateBuilder = CreatomateBuilder.getInstance(MODELS["4.1"]);
   }
 
+  //TODO: Remove this method
   /**
    * Validates a video template with comprehensive checks
    * Uses core validation + server-specific validations
@@ -179,6 +180,7 @@ export class VideoTemplateService {
     return template;
   }
 
+    //TODO: Remove this method
   /**
    * DEPRECATED: Use generateTemplate() instead
    * Kept for backward compatibility during migration
@@ -221,6 +223,7 @@ export class VideoTemplateService {
     throw new Error('VideoTemplateService.buildTemplate is deprecated. Use generateTemplate() instead.');
   }
 
+    //TODO: Remove this method
   /**
    * Validates scene plan against available videos
    */
