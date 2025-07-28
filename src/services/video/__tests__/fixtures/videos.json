@@ -1,0 +1,46 @@
+[
+  {
+    "id": "video-1",
+    "title": "Beach vacation",
+    "description": "Relaxing beach scene",
+    "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751911752010_IMG_3725.MOV",
+    "tags": ["beach", "vacation", "relaxing"],
+    "user_id": "user-123",
+    "duration_seconds": 10,
+    "created_at": "2025-07-01T10:00:00Z",
+    "updated_at": "2025-07-01T10:00:00Z"
+  },
+  {
+    "id": "video-2",
+    "title": "Work setup",
+    "description": "Office workspace",
+    "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1753188463542_IMG_0007.MP4",
+    "tags": ["work", "office", "productivity"],
+    "user_id": "user-123",
+    "duration_seconds": 15,
+    "created_at": "2025-07-01T10:00:00Z",
+    "updated_at": "2025-07-01T10:00:00Z"
+  },
+  {
+    "id": "video-3",
+    "title": "Automation demo",
+    "description": "Showing automation tools",
+    "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751883033921_IMG_0008.MP4",
+    "tags": ["automation", "tech", "demo"],
+    "user_id": "user-123",
+    "duration_seconds": 20,
+    "created_at": "2025-07-01T10:00:00Z",
+    "updated_at": "2025-07-01T10:00:00Z"
+  },
+  {
+    "id": "video-4",
+    "title": "Missing URL video",
+    "description": "Video without upload URL",
+    "upload_url": "",
+    "tags": ["test"],
+    "user_id": "user-123",
+    "duration_seconds": 5,
+    "created_at": "2025-07-01T10:00:00Z",
+    "updated_at": "2025-07-01T10:00:00Z"
+  }
+]

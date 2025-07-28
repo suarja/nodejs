@@ -1,0 +1,266 @@
+{
+  "output_format": "mp4",
+  "width": 720,
+  "height": 1280,
+  "snapshot_time": 1.28,
+  "elements": [
+    {
+      "id": "68165505-c8b5-488c-a569-1c74ab92b917",
+      "name": "Scene-1",
+      "type": "composition",
+      "track": 1,
+      "time": 0,
+      "elements": [
+        {
+          "id": "bc613b3c-f256-4fe5-ae3b-ba1e20a9dc11",
+          "name": "Image-1",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "source": "99bac41d-843f-46fb-ab15-246aee6d68bd",
+          "color_overlay": "rgba(0,0,0,0.15)",
+          "dynamic": true,
+          "animations": [
+            {
+              "easing": "linear",
+              "type": "pan",
+              "end_x": "50%",
+              "scope": "element",
+              "track": 0,
+              "start_x": "50%",
+              "end_scale": "100%",
+              "start_scale": "120%"
+            }
+          ]
+        },
+        {
+          "id": "0cf1a646-4a53-4483-bea9-9ce8eff9101c",
+          "name": "Subtitles-1",
+          "type": "text",
+          "track": 2,
+          "time": 0,
+          "width": "86.66%",
+          "height": "37.71%",
+          "x_alignment": "50%",
+          "y_alignment": "50%",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "8 vmin",
+          "background_color": "rgba(216,216,216,0)",
+          "background_x_padding": "26%",
+          "background_y_padding": "7%",
+          "background_border_radius": "28%",
+          "transcript_source": "f18e6afb-3fe5-4ad2-95d4-5050f9b413ba",
+          "transcript_effect": "highlight",
+          "transcript_maximum_length": 35,
+          "transcript_color": "#ff0040",
+          "fill_color": "#ffffff",
+          "stroke_color": "#333333",
+          "stroke_width": "1.05 vmin"
+        },
+        {
+          "id": "f18e6afb-3fe5-4ad2-95d4-5050f9b413ba",
+          "name": "Voiceover-1",
+          "type": "audio",
+          "track": 3,
+          "time": 0,
+          "source": "",
+          "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=XrExE9yKIg1WjnnlVkGX stability=0.75",
+          "dynamic": true
+        }
+      ]
+    },
+    {
+      "id": "dce10f14-514b-4152-b6b9-4c8bf6e709ee",
+      "name": "Scene-2",
+      "type": "composition",
+      "track": 1,
+      "elements": [
+        {
+          "id": "01d9661b-22fd-4905-a1ab-274603f66433",
+          "name": "Image-2",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "source": "91ae53bc-7aa5-44f9-84e9-b4b3bb121845",
+          "color_overlay": "rgba(0,0,0,0.15)",
+          "dynamic": true,
+          "animations": [
+            {
+              "easing": "linear",
+              "type": "pan",
+              "end_x": "50%",
+              "scope": "element",
+              "start_x": "50%",
+              "end_scale": "120%",
+              "start_scale": "100%"
+            }
+          ]
+        },
+        {
+          "id": "d2e748cb-ecd9-4868-9b07-bce65ada04ef",
+          "name": "Subtitles-2",
+          "type": "text",
+          "track": 2,
+          "time": 0,
+          "width": "86.66%",
+          "height": "37.71%",
+          "x_alignment": "50%",
+          "y_alignment": "50%",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "8 vmin",
+          "background_color": "rgba(216,216,216,0)",
+          "background_x_padding": "26%",
+          "background_y_padding": "7%",
+          "background_border_radius": "28%",
+          "transcript_source": "e9b8ae82-f675-499f-a4d8-b8c1e1117a65",
+          "transcript_effect": "highlight",
+          "transcript_maximum_length": 35,
+          "transcript_color": "#ff0040",
+          "fill_color": "#ffffff",
+          "stroke_color": "#333333",
+          "stroke_width": "1.05 vmin"
+        },
+        {
+          "id": "e9b8ae82-f675-499f-a4d8-b8c1e1117a65",
+          "name": "Voiceover-2",
+          "type": "audio",
+          "track": 3,
+          "time": 0,
+          "source": "",
+          "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=XrExE9yKIg1WjnnlVkGX stability=0.75",
+          "dynamic": true
+        }
+      ]
+    },
+    {
+      "id": "e841dc1c-09c5-4b34-80b7-e630f67a5fb3",
+      "name": "Scene-3",
+      "type": "composition",
+      "track": 1,
+      "elements": [
+        {
+          "id": "8cfbbeeb-6f5b-4378-9ffb-9a68efa30f13",
+          "name": "Image-3",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "source": "6fe2f0b2-b98e-4d3e-a98a-f56c63960d30",
+          "color_overlay": "rgba(0,0,0,0.15)",
+          "dynamic": true,
+          "animations": [
+            {
+              "easing": "linear",
+              "type": "pan",
+              "end_x": "50%",
+              "scope": "element",
+              "start_x": "50%",
+              "end_scale": "100%",
+              "start_scale": "120%"
+            }
+          ]
+        },
+        {
+          "id": "98a4d4c9-02b3-49a8-b872-384383a10767",
+          "name": "Subtitles-3",
+          "type": "text",
+          "track": 2,
+          "time": 0,
+          "width": "86.66%",
+          "height": "37.71%",
+          "x_alignment": "50%",
+          "y_alignment": "50%",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "8 vmin",
+          "background_color": "rgba(216,216,216,0)",
+          "background_x_padding": "26%",
+          "background_y_padding": "7%",
+          "background_border_radius": "28%",
+          "transcript_source": "dd10f424-addc-41a8-a473-b1b62539c2b5",
+          "transcript_effect": "highlight",
+          "transcript_maximum_length": 35,
+          "transcript_color": "#ff0040",
+          "fill_color": "#ffffff",
+          "stroke_color": "#333333",
+          "stroke_width": "1.05 vmin"
+        },
+        {
+          "id": "dd10f424-addc-41a8-a473-b1b62539c2b5",
+          "name": "Voiceover-3",
+          "type": "audio",
+          "track": 3,
+          "time": 0,
+          "source": "",
+          "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=XrExE9yKIg1WjnnlVkGX stability=0.75",
+          "dynamic": true
+        }
+      ]
+    },
+    {
+      "id": "d9390e19-0dd0-48a5-8497-3ad46c1c52c0",
+      "name": "Scene-4",
+      "type": "composition",
+      "track": 1,
+      "elements": [
+        {
+          "id": "a8aeb2dc-ca93-48aa-9048-1c9352908907",
+          "name": "Image-4",
+          "type": "image",
+          "track": 1,
+          "time": 0,
+          "source": "62879b23-3b26-4066-83e3-32ef7d7ff288",
+          "color_overlay": "rgba(0,0,0,0.15)",
+          "dynamic": true,
+          "animations": [
+            {
+              "easing": "linear",
+              "type": "pan",
+              "end_x": "50%",
+              "scope": "element",
+              "start_x": "50%",
+              "end_scale": "120%",
+              "start_scale": "100%"
+            }
+          ]
+        },
+        {
+          "id": "1795a549-f1de-4022-91f1-7583659f02da",
+          "name": "Subtitles-4",
+          "type": "text",
+          "track": 2,
+          "time": 0,
+          "width": "86.66%",
+          "height": "37.71%",
+          "x_alignment": "50%",
+          "y_alignment": "50%",
+          "font_family": "Montserrat",
+          "font_weight": "700",
+          "font_size": "8 vmin",
+          "background_color": "rgba(216,216,216,0)",
+          "background_x_padding": "26%",
+          "background_y_padding": "7%",
+          "background_border_radius": "28%",
+          "transcript_source": "db04264f-eee7-4b16-bab4-52cf7e5edf15",
+          "transcript_effect": "highlight",
+          "transcript_maximum_length": 35,
+          "transcript_color": "#ff0040",
+          "fill_color": "#ffffff",
+          "stroke_color": "#333333",
+          "stroke_width": "1.05 vmin"
+        },
+        {
+          "id": "db04264f-eee7-4b16-bab4-52cf7e5edf15",
+          "name": "Voiceover-4",
+          "type": "audio",
+          "track": 3,
+          "time": 0,
+          "source": "",
+          "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=XrExE9yKIg1WjnnlVkGX stability=0.75",
+          "dynamic": true
+        }
+      ]
+    }
+  ]
+}
