@@ -166,6 +166,7 @@ export class VideoTemplateService {
     processLogger.info('✅ Template generated');
 
     // Step 5-7: Apply template fixes
+    // TODO: Add this to validation service
     this.creatomateBuilder.patchAudioTextToSource(template);
     this.creatomateBuilder.fixTemplate(template);
     this.creatomateBuilder.handleCaptionConfiguration(template, config.captionStructure);
@@ -265,18 +266,6 @@ export class VideoTemplateService {
     }, 0);
   }
 
-  /**
-   * Prepares videos for template generation by ensuring all required fields
-   */
-  public prepareVideosForTemplate(videos: VideoType[]): VideoType[] {
-    return videos.map(video => ({
-      ...video,
-      // Ensure all required fields are present
-      duration_seconds: video.duration_seconds || null,
-      tags: video.tags || [],
-      description: video.description || ''
-    }));
-  }
 }
 
 // Export singleton instance
