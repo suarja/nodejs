@@ -20,6 +20,7 @@ import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, M
 import { Agent, run } from '@openai/agents';
 import { z } from "zod";
 import { logger } from "../../config/logger";
+import { VIDEO_DURATION_FACTOR } from "../../config/video-constants";
 
   const OutputSchema = z.object({
         script: z.string().describe("The script to be generated").nullable().optional(),
@@ -870,7 +871,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         const words = parsed.script.split(/\s+/).length;
         metadata = {
           wordCount: words,
-          estimatedDuration: Math.round(words * 0.9), // ~150 words per minute = 0.4 seconds per word
+          estimatedDuration: Math.round(words * VIDEO_DURATION_FACTOR),
           status: metadata.status || "draft",
           nextSteps: metadata.nextSteps,
         };

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { createOpenAIClient, MODEL } from '../config/openai';
+import { VIDEO_DURATION_FACTOR } from '../config/video-constants';
 
 export class ScriptReviewer {
   private openai: OpenAI;
@@ -115,7 +116,7 @@ Ensure the script is smooth, clean, and ready for ElevenLabs synthesis without m
 
       // Validate script length
       const wordCount = reviewedScript.split(/\s+/).length;
-      const estimatedDuration = wordCount * 0.4; // Rough estimate: 0.4 seconds per word
+      const estimatedDuration = wordCount * VIDEO_DURATION_FACTOR; 
 
       if (estimatedDuration < 30 || estimatedDuration > 60) {
         console.warn(
