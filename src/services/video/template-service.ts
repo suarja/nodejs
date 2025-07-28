@@ -175,7 +175,8 @@ export class VideoTemplateService {
     // Step 8: Final template validation
     template = await videoValidationService.validateFinalTemplate(
       template,
-      config.selectedVideos
+      config.selectedVideos,
+      config.voiceId
     );
 
     processLogger.info('✅ Final template validation passed');

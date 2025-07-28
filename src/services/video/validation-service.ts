@@ -148,10 +148,16 @@ export class VideoValidationService {
    */
   async validateFinalTemplate(
     template: any,
-    selectedVideos: VideoType[]
+    selectedVideos: VideoType[],
+    expectedVoiceId?: string
   ): Promise<any> {
     // Structure validation
     this.validateTemplateStructure(template);
+    
+    // Voice ID validation
+    if (expectedVoiceId) {
+      this.validateTemplateVoiceIds(template, expectedVoiceId);
+    }
     
     // URL validation ONCE (no more triple repair!)
     const videoUrlRepairer = new VideoUrlRepairer(selectedVideos, logger);
@@ -307,6 +313,74 @@ export class VideoValidationService {
     }
 
     logger.info("✅ Template structure validation passed");
+  }
+
+  /**
+   * Validate and fix audio elements to use the expected voice ID
+   */
+  private validateTemplateVoiceIds(template: any, expectedVoiceId: string): void {
+    const errors: string[] = [];
+    let fixedCount = 0;
+    
+    if (!template.elements || !Array.isArray(template.elements)) {
+      return;
+    }
+
+    for (let i = 0; i < template.elements.length; i++) {
+      const composition = template.elements[i];
+      
+      if (composition.type !== 'composition' || !composition.elements) {
+        continue;
+      }
+
+      // Find audio elements in this composition
+      const audioElements = composition.elements.filter((el: any) => el.type === 'audio');
+      
+      for (const audioElement of audioElements) {
+        if (audioElement.provider && typeof audioElement.provider === 'string') {
+          // Extract voice_id from provider string (e.g., "elevenlabs model_id=eleven_multilingual_v2 voice_id=abc123")
+          const voiceIdMatch = audioElement.provider.match(/voice_id=([^\s]+)/);
+          
+          if (voiceIdMatch) {
+            const actualVoiceId = voiceIdMatch[1];
+            if (actualVoiceId !== expectedVoiceId) {
+              errors.push(
+                `Scene ${i + 1}: Audio element "${audioElement.id || 'unnamed'}" uses voice ID "${actualVoiceId}" instead of "${expectedVoiceId}"`
+              );
+              
+              // Fix the voice ID
+              audioElement.provider = audioElement.provider.replace(
+                /voice_id=[^\s]+/,
+                `voice_id=${expectedVoiceId}`
+              );
+              fixedCount++;
+            }
+          } else {
+            errors.push(
+              `Scene ${i + 1}: Audio element "${audioElement.id || 'unnamed'}" provider string does not contain voice_id`
+            );
+            
+            // Add voice_id to provider string if it's missing
+            audioElement.provider = `${audioElement.provider} voice_id=${expectedVoiceId}`;
+            fixedCount++;
+          }
+        } else {
+          errors.push(
+            `Scene ${i + 1}: Audio element "${audioElement.id || 'unnamed'}" is missing provider information`
+          );
+          
+          // Set default provider with expected voice ID
+          audioElement.provider = `elevenlabs model_id=eleven_multilingual_v2 voice_id=${expectedVoiceId}`;
+          fixedCount++;
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      logger.warn(`⚠️ Voice ID validation found issues (fixed ${fixedCount} items):\n${errors.join('\n')}`);
+    } else {
+      logger.info("✅ Template voice ID validation passed - all scenes use correct voice ID");
+    }
   }
 
   /**
