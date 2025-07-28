@@ -10,6 +10,7 @@ import { ScenePlanSchema } from '../../types/video';
 import OpenAI from 'openai';
 import { VideoUrlRepairer } from './videoUrlRepairer';
 import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
+import { TemplateConfig } from './template-service';
 
 interface DurationViolation {
   sceneIndex: number;
@@ -147,21 +148,26 @@ export class VideoValidationService {
    * Phase 3: Final template validation (after template is built)
    * Validates template structure and URLs
    */
-  async validateFinalTemplate(
+  async validateTemplate(
     template: any,
-    selectedVideos: VideoType[],
-    expectedVoiceId?: string
+   config: TemplateConfig
   ): Promise<any> {
+
+       // Step 5-7: Apply template fixes
+    this.patchAudioTextToSource(template);
+    this.fixTemplate(template);
+    this.handleCaptionConfiguration(template, config.captionStructure);
+
+
     // Structure validation
     this.validateTemplateStructure(template);
     
     // Voice ID validation
-    if (expectedVoiceId) {
-      this.validateTemplateVoiceIds(template, expectedVoiceId);
+    if (config.voiceId) {
+      this.validateTemplateVoiceIds(template, config.voiceId);
     }
     
-    // URL validation ONCE (no more triple repair!)
-    const videoUrlRepairer = new VideoUrlRepairer(selectedVideos, logger);
+    const videoUrlRepairer = new VideoUrlRepairer(config.selectedVideos, logger);
     videoUrlRepairer.repairTemplate(template);
     
     return template;

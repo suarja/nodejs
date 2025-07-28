@@ -12,6 +12,17 @@ import winston from 'winston';
 import { PromptService } from '../promptService';
 import { MODELS } from '../../config/openai';
 
+export type TemplateConfig = {
+     scriptText: string;
+      selectedVideos: VideoType[];
+      captionConfig: CaptionConfiguration;
+      editorialProfile: any;
+      voiceId: string;
+      outputLanguage: string;
+      systemPrompt?: string;
+      captionStructure?: any;
+}
+
 /**
  * Enhanced video template service that extends core functionality
  * with server-specific features like Creatomate integration
@@ -90,16 +101,7 @@ export class VideoTemplateService {
    * Replaces logic from VideoGeneratorService.generateTemplate()
    */
   public async generateTemplate(
-    config: {
-      scriptText: string;
-      selectedVideos: VideoType[];
-      captionConfig: CaptionConfiguration;
-      editorialProfile: any;
-      voiceId: string;
-      outputLanguage: string;
-      systemPrompt?: string;
-      captionStructure?: any;
-    }
+    config: TemplateConfig
   ): Promise<any> {
     const processLogger = logger.child({ method: 'generateTemplate' });
     
@@ -163,20 +165,13 @@ export class VideoTemplateService {
       agentPrompt: promptTemplate.system,
     });
 
-    processLogger.info('✅ Template generated');
-
-    // Step 5-7: Apply template fixes
-    videoValidationService.patchAudioTextToSource(template);
-    videoValidationService.fixTemplate(template);
-    videoValidationService.handleCaptionConfiguration(template, config.captionStructure);
 
     processLogger.info('✅ Template fixes applied');
 
     // Step 8: Final template validation
-    template = await videoValidationService.validateFinalTemplate(
+    template = await videoValidationService.validateTemplate(
       template,
-      config.selectedVideos,
-      config.voiceId
+      config
     );
 
     processLogger.info('✅ Final template validation passed');
