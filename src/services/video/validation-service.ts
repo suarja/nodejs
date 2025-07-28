@@ -9,6 +9,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import { ScenePlanSchema } from '../../types/video';
 import OpenAI from 'openai';
 import { VideoUrlRepairer } from './videoUrlRepairer';
+import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
 
 interface DurationViolation {
   sceneIndex: number;
@@ -411,6 +412,174 @@ export class VideoValidationService {
     }
 
     return errors;
+  }
+
+
+  /**
+   * Patch tous les éléments audio pour remplacer la clé 'text' par 'source' si besoin
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  patchAudioTextToSource(template: any) {
+    if (!template || !template.elements || !Array.isArray(template.elements))
+      return;
+    template.elements.forEach((scene: any) => {
+      if (scene.elements && Array.isArray(scene.elements)) {
+        scene.elements.forEach((element: any) => {
+          if (element.type === "audio" && typeof element.text === "string") {
+            // Si la clé 'text' existe, on la copie dans 'source' et on la supprime
+            element.source = element.text;
+            delete element.text;
+            console.log(
+              `🔧 Patch audio: remplacé 'text' par 'source' dans l'élément audio ${
+                element.id || ""
+              }`
+            );
+          }
+        });
+      }
+    });
+  }
+    /**
+   * Fix template properties like video.fit to 'cover'
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  fixTemplate(template: any) {
+    // Fix the elements.video.fit to be cover and duration to be null
+    template.elements.forEach((element: any) => {
+      element.elements.forEach((element: any) => {
+        if (element.type === "video") {
+          console.log("🚧 Fixing video.fit to cover 🚧");
+          element.fit = "cover";
+
+          // Ensure video duration is null to limit video to caption/voiceover length
+          console.log(
+            "🚧 Setting video.duration to null for TikTok optimization 🚧"
+          );
+          element.duration = null;
+        }
+      });
+    });
+  }
+
+  /**
+   * Handle caption configuration with simplified logic
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  handleCaptionConfiguration(template: any, captionConfig: any) {
+    // If no caption config provided, apply default configuration
+    console.log(
+      "🚧 handleCaptionConfiguration called with captionConfig:",
+      JSON.stringify(captionConfig, null, 2)
+    );
+    if (!captionConfig) {
+      console.log("🚧 No caption configuration provided, using default 🚧");
+      const defaultConfig = {
+        enabled: true,
+        presetId: "karaoke",
+        placement: "bottom",
+        transcriptColor: "#04f827",
+        transcriptEffect: "karaoke",
+      };
+      this.fixCaptions(template, defaultConfig);
+      return;
+    }
+
+    // Check if captions are disabled
+    if (captionConfig.enabled === false) {
+      console.log(
+        "🚧 Captions are disabled, removing all subtitle elements 🚧"
+      );
+      this.disableCaptions(template);
+      return;
+    }
+
+    // Apply caption configuration
+    console.log("🚧 Applying caption configuration to template 🚧");
+    this.fixCaptions(template, captionConfig);
+  }
+
+
+  /**
+   * Remove all caption elements from the template
+   */
+  private disableCaptions(template: any) {
+    console.log("Disabling captions - removing all subtitle elements");
+
+    template.elements.forEach((scene: any) => {
+      scene.elements = scene.elements.filter((element: any) => {
+        const isSubtitle =
+          element.type === "text" &&
+          element.name &&
+          element.name.toLowerCase().includes("subtitle");
+
+        if (isSubtitle) {
+          console.log(`Removing subtitle element: ${element.name}`);
+        }
+
+        return !isSubtitle;
+      });
+    });
+  }
+
+  private fixCaptions(template: any, captionConfig: any) {
+    console.log("🚧 Fixing captions with direct config approach 🚧");
+
+    // Get the properties to apply from the caption configuration
+    const captionProperties = convertCaptionConfigToProperties(
+      captionConfig,
+      logger
+    );
+    console.log(
+      "🚧 Applying caption properties:",
+      JSON.stringify(captionProperties, null, 2)
+    );
+
+    // Apply caption configuration to all text elements
+    template.elements.forEach((scene: any) => {
+      scene.elements.forEach((element: any) => {
+        if (
+          element.type === "text" &&
+          element.name &&
+          element.name.toLowerCase().includes("subtitle")
+        ) {
+          // Remove conflicting old format properties that can interfere
+          const conflictingProperties = [
+            "x",
+            "y", // Old positioning format
+            "highlight_color", // Should be transcript_color
+            "shadow_x",
+            "shadow_y",
+            "shadow_blur",
+            "shadow_color", // Legacy shadow properties
+            "text_transform", // Can conflict with Creatomate's text handling
+          ];
+
+          conflictingProperties.forEach((prop) => {
+            delete element[prop];
+          });
+
+          // Preserve critical properties that should not be overwritten
+          const preservedProperties = {
+            id: element.id,
+            name: element.name,
+            type: element.type,
+            track: element.track,
+            time: element.time,
+            duration: element.duration,
+            transcript_source: element.transcript_source, // Critical: preserve the audio source link
+          };
+
+          // Apply all caption properties, then restore preserved ones
+          Object.assign(element, captionProperties, preservedProperties);
+
+          console.log(`🚧 Applied captions to element ${element.id}:`, {
+            transcript_color: element.transcript_color,
+            transcript_effect: element.transcript_effect,
+            y_alignment: element.y_alignment,
+          });
+        }
+      });
+    });
   }
 }
 

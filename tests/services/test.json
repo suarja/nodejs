@@ -1,0 +1,70 @@
+[
+  {
+      "id": "28635160-91e1-442d-8fe9-471e64487b77",
+      "title": "Working out",
+      "description": "OK moi en train de faire des équilibres sur les mains avec des parallèles",
+      "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1753188463542_IMG_0007.MP4",
+      "tags": ["Last"],
+      "user_id": "f3d0be35-d766-4a4a-92bc-ae72614b9470",
+      "created_at": "2025-07-22T12:47:45.510647+00:00",
+      "duration_seconds": 10,
+    "analysis_completed_at": null,
+    "analysis_data": null,
+    "analysis_error": null,
+    "analysis_status": "failed",
+    "clerk_user_id": null,
+    "storage_path": "videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1753188463542_IMG_0007.MP4"
+  },
+  {
+    "analysis_completed_at": null,
+    "analysis_data": null,
+    "analysis_error": null,
+    "analysis_status": "completed",
+    "clerk_user_id": null,
+    "created_at": "2025-07-07T18:09:16.100791+00:00",
+    "description": "Plage magique landscape avec mer et bateaux en fond. Press handstand",
+    "duration_seconds": 9,
+    "id": "28a8ad4c-6488-4796-87a3-0d1e11f65aa0",
+    "storage_path": "videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751911752010_IMG_3725.MOV",
+    "tags": ["Handstand", "beach", "last"],
+    "title": "Press hand stand",
+    "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751911752010_IMG_3725.MOV",
+    "user_id": "f3d0be35-d766-4a4a-92bc-ae72614b9470"
+  },
+  {
+    "analysis_completed_at": null,
+    "analysis_data": {
+      "content_type": "other",
+      "description": "An aerial drone shot captures a wide, arid desert landscape featuring a winding muddy river and several natural waterfalls cascading over rock ledges. The clear blue sky contrasts with the brown and earthy tones of the terrain.",
+      "duration_category": "short",
+      "key_moments": [],
+      "language": "en",
+      "segments": [],
+      "structure": [],
+      "tags": [],
+      "title": "Aerial View of Desert River and Waterfalls"
+    },
+    "analysis_error": null,
+    "analysis_status": "completed",
+    "clerk_user_id": null,
+    "created_at": "2025-07-07T10:10:38.751545+00:00",
+    "description": "An aerial drone shot captures a wide, arid desert landscape featuring a winding muddy river and several natural waterfalls cascading over rock ledges. The clear blue sky contrasts with the brown and earthy tones of the terrain.",
+    "duration_seconds": 16,
+    "id": "d4ee0c65-cd12-4258-9b25-5356f9b7444a",
+    "storage_path": "videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751883033921_IMG_0008.MP4",
+    "tags": [
+      "desert",
+      "waterfall",
+      "river",
+      "aerial",
+      "landscape",
+      "last",
+      "nature",
+      "drone",
+      "scenic"
+    ],
+    "title": "Aerial View of Desert River and Waterfalls",
+    "upload_url": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751883033921_IMG_0008.MP4",
+    "user_id": "f3d0be35-d766-4a4a-92bc-ae72614b9470"
+  }
+]

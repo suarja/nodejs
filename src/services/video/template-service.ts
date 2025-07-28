@@ -166,10 +166,9 @@ export class VideoTemplateService {
     processLogger.info('✅ Template generated');
 
     // Step 5-7: Apply template fixes
-    // TODO: Add this to validation service
-    this.creatomateBuilder.patchAudioTextToSource(template);
-    this.creatomateBuilder.fixTemplate(template);
-    this.creatomateBuilder.handleCaptionConfiguration(template, config.captionStructure);
+    videoValidationService.patchAudioTextToSource(template);
+    videoValidationService.fixTemplate(template);
+    videoValidationService.handleCaptionConfiguration(template, config.captionStructure);
 
     processLogger.info('✅ Template fixes applied');
 
