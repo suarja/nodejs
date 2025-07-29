@@ -9,7 +9,6 @@ import { testS3Connection } from "./config/aws";
 import { AgentService } from "./services/agentService";
 import { logger, logtail } from "./config/logger";
 import { authenticateUser, ClerkAuthService, MonetizationService } from "editia-core";
-import { agentops } from 'agentops';
 
 // Load environment variables
 dotenv.config();
@@ -34,9 +33,7 @@ try {
   process.exit(1);
 }
 
-  agentops.init({
-    apiKey: process.env.AGENT_OPS_API_KEY!,
-  });
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
