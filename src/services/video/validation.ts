@@ -1,3 +1,4 @@
+import { isValidVideo, VideoTypeSchema } from 'editia-core';
 import {
   VideoType,
   CaptionConfiguration,
@@ -5,7 +6,6 @@ import {
   VideoGenerationRequest,
   ValidatedVideo,
   VideoGenerationError,
-  isValidVideo,
   isValidCaptionConfig,
   isValidEditorialProfile,
 } from '../../types/video';
@@ -285,10 +285,11 @@ export class VideoValidationService {
     // Validate each video
     selectedVideos.forEach((video, index) => {
       if (!isValidVideo(video)) {
+        const { error } = VideoTypeSchema.safeParse(video);
         errors.push({
           field: `selectedVideos[${index}]`,
           code: 'INVALID_VIDEO',
-          message: `Video at index ${index} is invalid`,
+          message: `Video at index ${index} is invalid: ${error?.message}`,
           value: video,
         });
       }
@@ -430,16 +431,7 @@ export class VideoValidationService {
    * Validates videos array
    */
   static validateVideos(videos: VideoType[]): ValidatedVideo[] {
-    return videos.filter(isValidVideo).map((video) => ({
-      id: video.id,
-      upload_url: video.upload_url,
-      title: video.title,
-      description: video.description,
-      tags: video.tags,
-      user_id: video.user_id,
-      analysis_data: video.analysis_data,
-      duration_seconds: video.duration_seconds,
-    }));
+    return videos.filter(isValidVideo);
   }
 
   /**

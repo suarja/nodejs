@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VIDEO_DURATION_FACTOR } from "../config/video-constants";
 
 // Script Chat Message Types
 export interface ChatMessage {
@@ -136,7 +137,7 @@ export const scriptChatRequestSchema = z.object({
 // Utility Functions
 export const estimateScriptDuration = (script: string): number => {
   const wordCount = script.split(/\s+/).length;
-  return wordCount * 0.9; // 0.9 seconds per word
+  return wordCount * VIDEO_DURATION_FACTOR; 
 };
 
 export const generateScriptTitle = (script: string): string => {

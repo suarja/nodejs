@@ -2,15 +2,36 @@
 
 import z from "zod";
 import { Database } from "../config/supabase-types";
+import {
+  CaptionConfiguration as CoreCaptionConfiguration,
+  VideoEditorialProfile as CoreEditorialProfile,
+  VideoType as CoreVideoType,
+  VideoRequestStatus as CoreVideoRequestStatus,
+  VideoGenerationRequest as CoreVideoGenerationRequest,
+  CaptionConfigurationSchema as CoreCaptionConfigurationSchema,
+  VideoEditorialProfileSchema as CoreEditorialProfileSchema,
+  validateCaptionConfig,
+  validateVideoEditorialProfile,
+  isValidVideo as isValidCoreVideo,
+} from "editia-core";
 
-export const CaptionConfigurationSchema = z.object({
-  enabled: z.boolean(),
-  presetId: z.string().optional(),
-  placement: z.enum(["top", "center", "bottom"]),
-  transcriptColor: z.string().optional(),
-  transcriptEffect: z.string().optional(),
-});
+// Re-export core types for backward compatibility
+export type CaptionConfiguration = CoreCaptionConfiguration;
+export type EditorialProfile = CoreEditorialProfile;
+// Extend VideoType to include server-specific fields but maintain base compatibility  
+export interface VideoType extends Omit<CoreVideoType, 'created_at' | 'updated_at' | 'id' | 'user_id' | 'upload_url'> {
+  id: string; // Server uses plain string IDs
+  user_id: string | null; // Server allows null user_id from database
+  upload_url: string | null; // Server allows null upload_url from database
+  analysis_data?: any; // Server-specific analysis data
+  analysis_status?: CoreVideoRequestStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+export const CaptionConfigurationSchema = CoreCaptionConfigurationSchema;
+export const EditorialProfileSchema = CoreEditorialProfileSchema;
 
+// Server-specific scene planning types
 export const ScenePlanSchema = z.object({
   scenes: z.array(
     z.object({
@@ -29,30 +50,6 @@ export const ScenePlanSchema = z.object({
 });
 
 export type ScenePlan = z.infer<typeof ScenePlanSchema>;
-
-export type CaptionConfiguration = z.infer<typeof CaptionConfigurationSchema>;
-
-export interface VideoType {
-  id: string;
-  title: string;
-  description: string;
-  upload_url: string;
-  tags: string[];
-  user_id: string;
-  analysis_data: Database["public"]["Tables"]["videos"]["Row"]["analysis_data"];
-  analysis_status?: VideoRequestStatus;
-  duration_seconds: number | null;
-}
-
-export const EditorialProfileSchema = z.object({
-  persona_description: z.string(),
-  tone_of_voice: z.string(),
-  audience: z.string(),
-  style_notes: z.string(),
-  examples: z.string().optional(),
-});
-
-export type EditorialProfile = z.infer<typeof EditorialProfileSchema>;
 
 // Type definitions for color constraints
 export type HexColor = `#${string}`;
@@ -75,34 +72,24 @@ export type HexColor = `#${string}`;
 //   transcriptEffect?: TranscriptEffect; // Custom effect override for transcript_effect
 // }
 
-// Enhanced types for better validation
-export type ValidatedVideo = Pick<
-  Database["public"]["Tables"]["videos"]["Row"],
-  | "id"
-  | "upload_url"
-  | "title"
-  | "description"
-  | "tags"
-  | "user_id"
-  | "analysis_data"
-  | "duration_seconds"
->;
+// Enhanced types for better validation  
+export type ValidatedVideo = VideoType;
 
-export enum VideoRequestStatus {
-  QUEUED = "queued",
-  RENDERING = "rendering",
-  COMPLETED = "done",
-  FAILED = "error",
-}
+// Re-export VideoRequestStatus with mapping for server-specific values
+export const VideoRequestStatus = {
+  QUEUED: CoreVideoRequestStatus.QUEUED,
+  RENDERING: CoreVideoRequestStatus.PROCESSING,
+  DONE: CoreVideoRequestStatus.COMPLETED,
+  ERROR: CoreVideoRequestStatus.FAILED,
+} as const;
 
-export interface VideoGenerationRequest {
-  prompt: string;
+export type VideoRequestStatus = CoreVideoRequestStatus;
+
+// Server-specific video generation request extending core type
+export interface VideoGenerationRequest extends Omit<CoreVideoGenerationRequest, 'userId' | 'scriptId' | 'selectedVideoIds'> {
   systemPrompt: string;
   selectedVideos: VideoType[];
-  editorialProfile: EditorialProfile;
   voiceId: string;
-  captionConfig: CaptionConfiguration;
-  outputLanguage: string;
 }
 
 // export interface EditorialProfile {
@@ -131,33 +118,16 @@ export interface VideoGenerationError extends Error {
 // Type guards for runtime validation
 export function isValidVideo(video: any): video is VideoType {
   return (
-    typeof video === "object" &&
-    video !== null &&
-    typeof video.id === "string" &&
-    typeof video.upload_url === "string" &&
-    typeof video.title === "string" &&
-    Array.isArray(video.tags)
+    isValidCoreVideo(video) &&
+    (video.analysis_data === undefined || video.analysis_data === null || typeof video.analysis_data === "object")
   );
 }
 
-// Caption config validation
+// Re-export validation functions from core
 export function isValidCaptionConfig(
   config: any
 ): config is CaptionConfiguration {
-  return (
-    typeof config === "object" &&
-    config !== null &&
-    typeof config.enabled === "boolean" &&
-    (config.presetId === undefined || typeof config.presetId === "string") &&
-    ["top", "center", "bottom"].includes(config.placement) &&
-    (config.transcriptColor === undefined ||
-      (typeof config.transcriptColor === "string" &&
-        config.transcriptColor.startsWith("#"))) &&
-    (config.transcriptEffect === undefined ||
-      ["karaoke", "highlight", "fade", "bounce", "slide", "enlarge"].includes(
-        config.transcriptEffect
-      ))
-  );
+  return validateCaptionConfig(config);
 }
 
 export function isValidHexColor(color: string): boolean {
@@ -167,14 +137,7 @@ export function isValidHexColor(color: string): boolean {
 export function isValidEditorialProfile(
   profile: any
 ): profile is EditorialProfile {
-  return (
-    typeof profile === "object" &&
-    profile !== null &&
-    typeof profile.persona_description === "string" &&
-    typeof profile.tone_of_voice === "string" &&
-    typeof profile.audience === "string" &&
-    typeof profile.style_notes === "string"
-  );
+  return validateVideoEditorialProfile(profile);
 }
 
 // Server-side specific types for queue management

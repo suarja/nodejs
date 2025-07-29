@@ -3,18 +3,12 @@ import { join } from "path";
 import OpenAI from "openai";
 import { createOpenAIClient } from "../config/openai";
 import { PromptService } from "./promptService";
-import { convertCaptionConfigToProperties } from "../utils/video/preset-converter";
-import { logger } from "../config/logger";
-import z from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import {
-  CaptionConfiguration,
-  EditorialProfile,
   ScenePlan,
   ScenePlanSchema,
   ValidatedVideo,
 } from "../types/video";
-import { VideoUrlRepairer } from "./video/videoUrlRepairer";
 import winston from "winston";
 
 export class CreatomateBuilder {
@@ -50,7 +44,11 @@ export class CreatomateBuilder {
     }
   }
 
-  private async planVideoStructure(
+  /**
+   * Plan video structure with scene-by-scene breakdown
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  async planVideoStructure(
     script: string,
     selectedVideos: ValidatedVideo[],
     logger: winston.Logger
@@ -107,7 +105,11 @@ REMEMBER: Every scene MUST have a video_asset assigned. Never leave video_asset 
     return response.output_parsed;
   }
 
-  private async generateTemplate(params: {
+  /**
+   * Generate Creatomate template from scene plan
+   * Now PUBLIC for VideoTemplateService to call directly
+   */
+  async generateTemplate(params: {
     script: string;
     selectedVideos: any[];
     voiceId: string;
@@ -227,277 +229,6 @@ Génère le JSON Creatomate pour cette vidéo, en utilisant EXACTEMENT les asset
     return JSON.parse(completion.choices[0]?.message.content || "{}");
   }
 
-  /**
-   * Patch tous les éléments audio pour remplacer la clé 'text' par 'source' si besoin
-   */
-  private patchAudioTextToSource(template: any) {
-    if (!template || !template.elements || !Array.isArray(template.elements))
-      return;
-    template.elements.forEach((scene: any) => {
-      if (scene.elements && Array.isArray(scene.elements)) {
-        scene.elements.forEach((element: any) => {
-          if (element.type === "audio" && typeof element.text === "string") {
-            // Si la clé 'text' existe, on la copie dans 'source' et on la supprime
-            element.source = element.text;
-            delete element.text;
-            console.log(
-              `🔧 Patch audio: remplacé 'text' par 'source' dans l'élément audio ${
-                element.id || ""
-              }`
-            );
-          }
-        });
-      }
-    });
-  }
 
-  /**
-   * Builds a Creatomate JSON template with enhanced caption support
-   */
-  async buildJson(params: {
-    script: string;
-    selectedVideos: ValidatedVideo[];
-    voiceId: string;
-    editorialProfile: EditorialProfile;
-    captionStructure: any;
-    agentPrompt: string;
-    logger: winston.Logger;
-  }): Promise<any> {
-    params.logger.info("🚧 CreatomateBuilder.buildJson called with params:");
-    params.logger.info(
-      "Caption structure type:",
-      typeof params.captionStructure
-    );
-    params.logger.info(
-      "Caption structure content:",
-      JSON.stringify(params.captionStructure, null, 2)
-    );
-
-    const urlRepairer = new VideoUrlRepairer(
-      params.selectedVideos,
-      params.logger
-    );
-
-    // Step 1: Plan the video structure (scene-by-scene)
-    const scenePlan = await this.planVideoStructure(
-      params.script,
-      params.selectedVideos,
-      params.logger
-    );
-
-    // Step 2: Validate and repair the scene plan with an AI Judge
-    const repairedScenePlan = await urlRepairer.repairScenePlanWithAI(
-      scenePlan,
-      params.logger
-    );
-
-    // Step 3: Generate the Creatomate template
-    const template = await this.generateTemplate({
-      script: params.script,
-      selectedVideos: params.selectedVideos,
-      voiceId: params.voiceId,
-      editorialProfile: params.editorialProfile,
-      scenePlan: repairedScenePlan,
-      captionStructure: params.captionStructure,
-      agentPrompt: params.agentPrompt,
-    });
-
-    // Step 3.5: Patch audio elements (text -> source)
-    this.patchAudioTextToSource(template);
-
-    // Step 4: Final deterministic URL repair on the generated template
-    urlRepairer.repairTemplate(template);
-
-    // Step 5: Fix other template issues (e.g., video.fit)
-    this.fixTemplate(template);
-
-    // Step 6: Handle caption configuration (enhanced logic)
-    this.handleCaptionConfiguration(template, params.captionStructure);
-
-    // Step 7: Validate the template
-    this.validateTemplate(template);
-
-    // Log repair summary
-    const repairSummary = urlRepairer.getRepairSummary();
-    if (repairSummary.totalCorrections > 0) {
-      params.logger.info("📋 URL repairs completed:", repairSummary);
-      params.logger.info(
-        "📋 Detailed corrections:",
-        urlRepairer.getCorrections()
-      );
-    } else {
-      params.logger.info("✅ No URL repairs needed - all URLs were correct");
-    }
-
-    return template;
-  }
-
-  private validateTemplate(template: any) {
-    // Basic structure validation
-    if (
-      !template.output_format ||
-      !template.width ||
-      !template.height ||
-      !template.elements
-    ) {
-      throw new Error("Invalid template: Missing required properties");
-    }
-
-    // Validate dimensions for TikTok format
-    if (template.width !== 1080 || template.height !== 1920) {
-      throw new Error("Invalid template: Must be 1080x1920 for vertical video");
-    }
-
-    // Validate scenes
-    if (!Array.isArray(template.elements)) {
-      throw new Error("Invalid template: elements must be an array");
-    }
-
-    console.log("✅ Template validation passed");
-  }
-
-  /* A function to post process the template to fix the elements. Exactly the video.fit:
-
-  Error Details:
-Source error: Video.fit: Expected one of these values: cover, contain, fill
-  We should enforce the fit to be cover
-
-}
-  */
-  private fixTemplate(template: any) {
-    // Fix the elements.video.fit to be cover and duration to be null
-    template.elements.forEach((element: any) => {
-      element.elements.forEach((element: any) => {
-        if (element.type === "video") {
-          console.log("🚧 Fixing video.fit to cover 🚧");
-          element.fit = "cover";
-
-          // Ensure video duration is null to limit video to caption/voiceover length
-          console.log(
-            "🚧 Setting video.duration to null for TikTok optimization 🚧"
-          );
-          element.duration = null;
-        }
-      });
-    });
-  }
-
-  /**
-   * Handle caption configuration with simplified logic
-   */
-  private handleCaptionConfiguration(template: any, captionConfig: any) {
-    // If no caption config provided, apply default configuration
-    console.log(
-      "🚧 handleCaptionConfiguration called with captionConfig:",
-      JSON.stringify(captionConfig, null, 2)
-    );
-    if (!captionConfig) {
-      console.log("🚧 No caption configuration provided, using default 🚧");
-      const defaultConfig = {
-        enabled: true,
-        presetId: "karaoke",
-        placement: "bottom",
-        transcriptColor: "#04f827",
-        transcriptEffect: "karaoke",
-      };
-      this.fixCaptions(template, defaultConfig);
-      return;
-    }
-
-    // Check if captions are disabled
-    if (captionConfig.enabled === false) {
-      console.log(
-        "🚧 Captions are disabled, removing all subtitle elements 🚧"
-      );
-      this.disableCaptions(template);
-      return;
-    }
-
-    // Apply caption configuration
-    console.log("🚧 Applying caption configuration to template 🚧");
-    this.fixCaptions(template, captionConfig);
-  }
-
-  /**
-   * Remove all caption elements from the template
-   */
-  private disableCaptions(template: any) {
-    console.log("Disabling captions - removing all subtitle elements");
-
-    template.elements.forEach((scene: any) => {
-      scene.elements = scene.elements.filter((element: any) => {
-        const isSubtitle =
-          element.type === "text" &&
-          element.name &&
-          element.name.toLowerCase().includes("subtitle");
-
-        if (isSubtitle) {
-          console.log(`Removing subtitle element: ${element.name}`);
-        }
-
-        return !isSubtitle;
-      });
-    });
-  }
-
-  private fixCaptions(template: any, captionConfig: any) {
-    console.log("🚧 Fixing captions with direct config approach 🚧");
-
-    // Get the properties to apply from the caption configuration
-    const captionProperties = convertCaptionConfigToProperties(
-      captionConfig,
-      logger
-    );
-    console.log(
-      "🚧 Applying caption properties:",
-      JSON.stringify(captionProperties, null, 2)
-    );
-
-    // Apply caption configuration to all text elements
-    template.elements.forEach((scene: any) => {
-      scene.elements.forEach((element: any) => {
-        if (
-          element.type === "text" &&
-          element.name &&
-          element.name.toLowerCase().includes("subtitle")
-        ) {
-          // Remove conflicting old format properties that can interfere
-          const conflictingProperties = [
-            "x",
-            "y", // Old positioning format
-            "highlight_color", // Should be transcript_color
-            "shadow_x",
-            "shadow_y",
-            "shadow_blur",
-            "shadow_color", // Legacy shadow properties
-            "text_transform", // Can conflict with Creatomate's text handling
-          ];
-
-          conflictingProperties.forEach((prop) => {
-            delete element[prop];
-          });
-
-          // Preserve critical properties that should not be overwritten
-          const preservedProperties = {
-            id: element.id,
-            name: element.name,
-            type: element.type,
-            track: element.track,
-            time: element.time,
-            duration: element.duration,
-            transcript_source: element.transcript_source, // Critical: preserve the audio source link
-          };
-
-          // Apply all caption properties, then restore preserved ones
-          Object.assign(element, captionProperties, preservedProperties);
-
-          console.log(`🚧 Applied captions to element ${element.id}:`, {
-            transcript_color: element.transcript_color,
-            transcript_effect: element.transcript_effect,
-            y_alignment: element.y_alignment,
-          });
-        }
-      });
-    });
-  }
+  
 }

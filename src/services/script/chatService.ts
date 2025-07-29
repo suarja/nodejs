@@ -16,9 +16,49 @@ import {
 import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
-import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES } from "editia-core";
-import { MonetizationError } from "editia-core/dist/services/monetization/monetization-service";
+import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError, Database, TableRow, Tables } from "editia-core";
+import { Agent, run } from '@openai/agents';
+import { z } from "zod";
+import { logger } from "../../config/logger";
+import { VIDEO_DURATION_FACTOR } from "../../config/video-constants";
 
+  const OutputSchema = z.object({
+        script: z.string().describe("The script to be generated").nullable().optional(),
+        hasScriptUpdate: z.boolean().describe("Whether the script has been updated"),
+        conversation: z.string().describe("The conversation history"),
+        metadata: z.object({
+          wordCount: z.number().describe("The word count of the script").nullable().optional(),
+          estimatedDuration: z.number().describe("The estimated duration of the script. The formula we use to estimate the rendering duration is: (wordCount* 0.7").nullable().optional(),
+          status: z.enum(["draft", "ready", "needs_work", "failed"]).describe("The status of the script").nullable().optional(),
+          nextSteps: z.string().describe("The next steps to be taken").nullable().optional(),
+        }).nullable().optional(),
+      });
+export const ComputedVideoSchema = z.object({
+  tiktok_video_id: z.string(),
+  video_url: z.string(),
+  description: z.string().optional(),
+  upload_date: z.string().optional(),
+  duration_seconds: z.number().optional(),
+  is_sponsored: z.boolean(),
+  is_ad: z.boolean(),
+  hashtags: z.array(z.string()),
+  music_info: z.any(),
+});
+
+      export const topVideoByMetricSchema = z.object({
+  by_views: z.array(z.object({
+    views: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+  by_likes: z.array(z.object({
+    likes: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+  by_engagement: z.array(z.object({
+    engagement_rate: z.number(),
+    ...ComputedVideoSchema.shape,
+  })),
+});
 /**
  * ScriptChatService - Handles conversational script generation
  *
@@ -45,86 +85,62 @@ export class ScriptChatService {
    */
   async handleChat(request: ScriptChatRequest): Promise<ScriptChatResponse> {
     try {
-      this.logger.info(`💬 Processing chat for user ${this.user.id}`);
-      this.logger.info(`📝 Request message: ${request.message}`);
-      this.logger.info(`👑 User Pro status: ${request.isPro || false}`);
+      // Use Promise.allSettled to handle concurrent requests
+      const [scriptDraftResult, editorialProfileResult, tiktokContextResult] = await Promise.allSettled([
+        this.getOrCreateScriptDraft(request),
+        this.getEditorialProfile(request.editorialProfileId),
+        request.scriptId ? this.getTikTokAnalysisContext(request.scriptId, this.user.id) : Promise.resolve(null)
+      ]);
 
-      // Get or create script draft
-      this.logger.info("🔄 Getting or creating script draft...");
-      const scriptDraft = await this.getOrCreateScriptDraft(request);
-      this.logger.info(`✅ Script draft: ${scriptDraft.id}`);
+      // Check results and log appropriately
+      if (scriptDraftResult.status === "fulfilled") {
+        var scriptDraft = scriptDraftResult.value;
+      } else {
+        this.logger.error("❌ Failed to get or create script draft:", scriptDraftResult.reason);
+        throw new Error("Failed to get or create script draft");
+      }
 
-      // Get editorial profile
-      this.logger.info("👤 Getting editorial profile...");
-      const editorialProfile = await this.getEditorialProfile(
-        request.editorialProfileId
-      );
-      this.logger.info(`✅ Editorial profile loaded`);
+      if (editorialProfileResult.status === "fulfilled") {
+        var editorialProfile = editorialProfileResult.value;
+      } else {
+        this.logger.error("❌ Failed to get editorial profile:", editorialProfileResult.reason);
+        throw new Error("Failed to get editorial profile");
+      }
 
-      // Get editorial profile and TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        this.logger.info("📱 Getting TikTok analysis context...");
-        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
-        this.logger.info(
-          tiktokContext
-            ? "✅ TikTok analysis context loaded"
-            : "📭 No TikTok analysis available"
-        );
+        if (tiktokContextResult.status === "fulfilled") {
+          tiktokContext = tiktokContextResult.value;
+        } else {
+          this.logger.warn("⚠️ Failed to fetch TikTok context:", tiktokContextResult.reason);
+        }
       } else {
-        this.logger.info(
-          "ℹ️ No scriptId provided, skipping TikTok context fetch"
-        );
+        this.logger.info("ℹ️ No scriptId provided, skipping TikTok context fetch");
       }
 
       // Create conversation history
-      this.logger.info("💭 Building conversation history...");
-      const conversationHistory = this.buildConversationHistory(
+      const prompts = this.buildConversationHistoryForAgent(
         scriptDraft.messages,
         request.message,
         editorialProfile,
         tiktokContext
       );
-      this.logger.info(
-        `✅ Conversation history built: ${conversationHistory.length} messages`
-      );
 
-      // Generate response with structured output
-      this.logger.info("🤖 Calling OpenAI with structured output...");
-      const completion = await this.openai.chat.completions.create({
+      const agent = new Agent({
         model: this.model,
-        messages: conversationHistory,
-        temperature: 0.7,
-        max_tokens: 1000,
-        response_format: { type: "json_object" },
+        name: 'Script Chat Agent',
+        instructions: prompts.instructions,
+        outputType: OutputSchema,
       });
-      this.logger.info("✅ OpenAI response received");
-
-      const assistantMessage = completion.choices[0]?.message?.content;
-
-      const tokensUsed = completion.usage?.total_tokens;
-      this.logger.info(`💰 Tokens used: ${tokensUsed}`);
-      if (tokensUsed) {
-        await this.updateTokenUsage(tokensUsed);
-      }
-      if (!assistantMessage) {
-        throw new Error("No response generated from OpenAI");
-      }
-      this.logger.info(
-        `📝 Assistant message length: ${assistantMessage.length}`
+      const completion = await run(
+        agent,
+        [
+          { role: "user", content: prompts.userMessage },
+        ],
+     
       );
-
-      // Parse structured response
-      this.logger.info("🔍 Parsing structured response...");
-      const structuredResponse = this.parseStructuredResponse(assistantMessage);
-      this.logger.info(`✅ Structured response parsed:`, {
-        hasScript: !!structuredResponse.script,
-        hasScriptUpdate: structuredResponse.hasScriptUpdate,
-        conversationLength: structuredResponse.conversation.length,
-      });
 
       // Create chat messages
-      this.logger.info("💬 Creating chat messages...");
       const userMessage: ChatMessage = {
         id: `msg_${Date.now()}_user`,
         role: "user",
@@ -135,53 +151,61 @@ export class ScriptChatService {
       const assistantChatMessage: ChatMessage = {
         id: `msg_${Date.now()}_assistant`,
         role: "assistant",
-        content: structuredResponse.conversation, // Store only the conversation part
+        content: completion.finalOutput?.conversation || "", // Store only the conversation part
         timestamp: new Date().toISOString(),
         metadata: {
-          tokensUsed: completion.usage?.total_tokens,
-          model: this.model,
-          hasScriptUpdate: structuredResponse.hasScriptUpdate,
-          scriptStatus: structuredResponse.metadata?.status,
-        },
+          hasScriptUpdate: completion.finalOutput?.hasScriptUpdate || false,
+          scriptStatus: completion.finalOutput?.metadata?.status || "draft",
+        }
       };
 
-      // Determine script to save (use existing if no update)
-      const scriptToSave =
-        structuredResponse.hasScriptUpdate && structuredResponse.script
-          ? structuredResponse.script
-          : scriptDraft.current_script;
+      const scriptToSave = completion.finalOutput?.script || scriptDraft.current_script;
 
       // Update script draft
-      this.logger.info("💾 Updating script draft...");
-      const updatedDraft = await this.updateScriptDraft(
-        scriptDraft.id,
-        scriptToSave,
-        [userMessage, assistantChatMessage]
-      );
-      this.logger.info("✅ Script draft updated successfully");
-
-      // Track script version for improvement analytics
-      if (structuredResponse.hasScriptUpdate && structuredResponse.script) {
-        await this.trackScriptVersion(
+      const [updateDraftResult, trackVersionResult, updateTokenUsageResult] = await Promise.allSettled([
+        this.updateScriptDraft(
           scriptDraft.id,
-          scriptDraft.current_script, // previous version
-          structuredResponse.script, // new version
-          request.message,
-          editorialProfile
-        );
+          scriptToSave,
+          [userMessage, assistantChatMessage],
+          scriptDraft.title
+        ),
+        completion.finalOutput?.hasScriptUpdate && completion.finalOutput?.script
+          ? this.trackScriptVersion(
+              scriptDraft.id,
+              scriptDraft.current_script, // previous version
+              completion.finalOutput?.script, // new version
+              request.message,
+              editorialProfile
+            )
+          : Promise.resolve(),
+        this.updateTokenUsage(completion.state._context.usage.totalTokens)
+      ]);
+
+      if (updateDraftResult.status === "fulfilled") {
+        this.logger.info("✅ Script draft updated successfully");
+      } else {
+        this.logger.error("❌ Failed to update script draft:", updateDraftResult.reason);
+      }
+
+      if (trackVersionResult.status === "rejected") {
+        this.logger.error("❌ Failed to track script version:", trackVersionResult.reason);
+      }
+
+      if (updateTokenUsageResult.status === "rejected") {
+        this.logger.warn("❌ Failed to update token usage:", updateTokenUsageResult.reason);
       }
 
       this.logger.info("📤 Returning response...");
       return {
-        scriptId: updatedDraft.id,
+        scriptId: scriptDraft.id,
         message: assistantChatMessage,
         currentScript: scriptToSave,
         metadata: {
-          wordCount: updatedDraft.word_count,
-          estimatedDuration: updatedDraft.estimated_duration,
-          hasScriptUpdate: structuredResponse.hasScriptUpdate,
-          scriptStatus: structuredResponse.metadata?.status,
-          nextSteps: structuredResponse.metadata?.nextSteps,
+          wordCount: scriptDraft.word_count,
+          estimatedDuration: scriptDraft.estimated_duration,
+          hasScriptUpdate: completion.finalOutput?.hasScriptUpdate,
+          scriptStatus: completion.finalOutput?.metadata?.status || "draft",
+          nextSteps: completion.finalOutput?.metadata?.nextSteps || "No next steps",
         },
       };
     } catch (error) {
@@ -198,7 +222,7 @@ export class ScriptChatService {
       .single();
 
     if (tokensUsageError) {
-      this.logger.error("❌ Error fetching tokens usage:", tokensUsageError);
+      this.logger.warn("❌ Error fetching tokens usage:", tokensUsageError);
     }
 
     let newTokensUsed = 0;
@@ -256,7 +280,7 @@ export class ScriptChatService {
       // Get TikTok analysis context
       let tiktokContext: string | null = null;
       if (request.scriptId) {
-        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId);
+        tiktokContext = await this.getTikTokAnalysisContext(request.scriptId, this.user.id);
       }
 
       // Step 3: Building context
@@ -449,14 +473,17 @@ export class ScriptChatService {
   private async updateScriptDraft(
     scriptId: string,
     newScript: string,
-    newMessages: ChatMessage[]
+    newMessages: ChatMessage[],
+    title?: string,
   ): Promise<ScriptDraft> {
     // Calculate metadata
     const wordCount = newScript.split(/\s+/).length;
     const estimatedDuration = estimateScriptDuration(newScript);
-
+    let newTitle = title;
+    if (!title) {
     // Generate intelligent title from first user message or script content
-    const title = await this.generateIntelligentTitle(newMessages, newScript);
+     newTitle = await this.generateIntelligentTitle(newMessages, newScript);
+    }
 
     // Get current draft to merge messages
     const { data: currentDraft, error: fetchError } = await supabase
@@ -478,7 +505,7 @@ export class ScriptChatService {
     const { data: updatedDraft, error } = await supabase
       .from("script_drafts")
       .update({
-        title,
+        title: newTitle,
         current_script: newScript,
         messages: allMessages as unknown as Json[],
         word_count: wordCount,
@@ -537,6 +564,41 @@ export class ScriptChatService {
     };
   }
 
+  /**
+   * Build conversation history for OpenAI using structured prompt design
+   */
+  private buildConversationHistoryForAgent(
+    previousMessages: ChatMessage[],
+    currentMessage: string,
+    editorialProfile: any,
+    tiktokContext?: string | null
+  ): {
+    instructions: string;
+    userMessage: string;
+  } {
+    // Get the structured prompt from prompt bank
+    const promptTemplate = PromptService.fillPromptTemplate(
+      "script-chat-conversation-agent",
+      {
+        messageHistory: this.formatMessageHistory(previousMessages),
+        currentMessage: currentMessage,
+        editorialProfile: this.formatEditorialProfile(editorialProfile),
+        outputLanguage: "fr", // Default to French, should be passed from request
+        currentScript: this.getCurrentScriptFromMessages(previousMessages),
+        tiktokAnalysis:
+          tiktokContext || "Aucune analyse TikTok disponible pour ce compte.",
+      }
+    );
+
+    if (!promptTemplate) {
+      this.logger.warn(
+        "⚠️ Script chat prompt template not found, using fallback"
+      );
+      throw new Error("Script chat prompt template not found");
+    }
+
+    return {instructions: promptTemplate.system, userMessage: promptTemplate.user};
+  }
   /**
    * Build conversation history for OpenAI using structured prompt design
    */
@@ -606,6 +668,12 @@ export class ScriptChatService {
   private formatMessageHistory(messages: ChatMessage[]): string {
     if (!messages || messages.length === 0) {
       return "No previous messages - this is the start of a new conversation.";
+    }
+    if (messages.length > 10) {
+      return messages.slice(0, 10).map((msg) => {
+        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+        return `[${timestamp}] ${msg.role.toUpperCase()}: ${msg.content}`;
+      }).join("\n\n");
     }
 
     return messages
@@ -803,7 +871,7 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         const words = parsed.script.split(/\s+/).length;
         metadata = {
           wordCount: words,
-          estimatedDuration: Math.round(words * 0.9), // ~150 words per minute = 0.4 seconds per word
+          estimatedDuration: Math.round(words * VIDEO_DURATION_FACTOR),
           status: metadata.status || "draft",
           nextSteps: metadata.nextSteps,
         };
@@ -935,24 +1003,16 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
    * Get TikTok analysis context for the user
    */
   private async getTikTokAnalysisContext(
-    scriptId: string
+    scriptId: string, 
+    user_id: string
   ): Promise<string | null> {
     try {
       this.logger.info("🎯 Getting TikTok analysis context...");
 
-      // First, find the account_id associated with this script draft or user
-      const { data: scriptDraft } = await supabase
-        .from("script_drafts")
-        .select("user_id")
-        .eq("id", scriptId)
-        .single();
-
-      if (!scriptDraft) return null;
-
       const { data: analysis } = await supabase
         .from("analyses")
         .select("account_id")
-        .eq("user_id", scriptDraft.user_id)
+        .eq("user_id", user_id)
         .eq("status", "completed")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -963,37 +1023,9 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
         return null;
       }
 
-      // ❗ REFACTORED: Fetch the full, comprehensive context via API call
-      const accountId = analysis.account_id;
-      const analyzerUrl =
-        process.env.ANALYZER_SERVICE_URL || "http://localhost:3001";
-      const response = await fetch(
-        `${analyzerUrl}/api/account-context/${accountId}`
-      );
+      const accountContext = await this.fetchTiktokAccountContext(analysis.account_id);
 
-      if (!response.ok) {
-        this.logger.warn(
-          `⚠️ API call to analyzer service failed with status ${response.status} for account ${accountId}`
-        );
-        return null; // or fallback to a basic context
-      }
-
-      const fullContext: any = await response.json();
-
-      if (!fullContext || !fullContext.account) {
-        this.logger.warn(
-          `⚠️ Could not retrieve full context via API for account ${accountId}`
-        );
-        return null;
-      }
-
-      this.logger.info(
-        `✅ Found and fetched full context for @${fullContext.account.tiktok_handle}`
-      );
-
-      // Format analysis context for the agent
-      const context = this.formatTikTokAnalysisContext(fullContext);
-      return context;
+        return this.formatTikTokAnalysisContext(accountContext);
     } catch (error) {
       this.logger.error("❌ Error fetching TikTok analysis context:", error);
       return null;
@@ -1003,14 +1035,14 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
   /**
    * Format TikTok analysis for agent context
    */
-  private formatTikTokAnalysisContext(fullContext: any | null): string {
+  private formatTikTokAnalysisContext(fullContext: Awaited<ReturnType<typeof this.fetchTiktokAccountContext>> | null): string {
     if (!fullContext) {
       return `## 📱 ANALYSE TIKTOK\n\nL'analyse détaillée du compte n'est pas disponible pour le moment.`;
     }
 
-    const { account, stats, aggregates, insights } = fullContext;
+    const { account, stats, aggregates, insights, top_videos } = fullContext;
 
-    let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
+    let context = `## 📱 ANALYSE TIKTOK DISPONIBLE\n\n**Compte analysé :** @${account?.tiktok_handle}\n**Statut :** ✅ Analyse complète\n`;
 
     if (stats) {
       context += `\n### 📊 Données du compte\n- **Abonnés :** ${
@@ -1035,19 +1067,23 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
     if (insights) {
       if (insights.profile_summary) {
         context += `\n### 🎯 Profil & Audience (par l'IA)\n- **Niche:** ${
-          insights.profile_summary.niche || "Non définie"
+          (insights?.profile_summary as any)?.niche || "Non définie"
         }\n- **Audience:** ${
-          insights.profile_summary.audience_profile?.description || "Non défini"
+          (insights?.profile_summary as any)?.audience_profile?.description || "Non défini"
         }\n`;
       }
-      if (insights.content_analysis?.content_pillars) {
-        context += `\n### 🎨 Piliers de Contenu\n${insights.content_analysis.content_pillars
+      if ((insights as any)?.content_analysis?.content_pillars) {
+        context += `\n### 🎨 Piliers de Contenu\n${(insights as any)?.content_analysis.content_pillars
           .map((p: any) => `- **${p.name}**`)
           .join("\n")}\n`;
       }
-      if (insights.recommendations?.content_strategy) {
-        context += `\n### 🔥 Recommandation Stratégique Clé\n- ${insights.recommendations.content_strategy[0]?.action}\n`;
+      if ((insights as any)?.recommendations?.content_strategy) {
+        context += `\n### 🔥 Recommandation Stratégique Clé\n- ${(insights as any)?.recommendations.content_strategy[0]?.action}\n`;
       }
+    }
+
+    if (top_videos) {
+      context += `\n### 🎥 Vidéos les plus populaires\n${top_videos.map((v: any) => `- (${v.raw_transcription})`).join("\n")}\n`;
     }
 
     context += `\n---
@@ -1057,5 +1093,175 @@ Réponds uniquement avec le titre, sans guillemets ni explications.`;
 - Propose des sujets alignés avec les piliers de contenu et la recommandation stratégique.`;
 
     return context;
+  }
+
+     async getAccountWithStats(accountId: string): Promise<{
+    account: TableRow<'accounts'>;
+    stats: TableRow<'accounts_stats'> | null;
+  } | null> {
+    try {
+      // Get account
+      const { data: account, error: accountError } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("id", accountId)
+        .single();
+
+      if (accountError) throw accountError;
+
+      // Get latest stats
+      const { data: stats, error: statsError } = await supabase
+        .from("accounts_stats")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("snapshot_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (statsError && statsError.code !== "PGRST116") {
+        throw statsError;
+      }
+
+      return {
+        account,
+        stats,
+      };
+    } catch (error) {
+      this.logger.error("❌ Failed to get account with stats:", error);
+      throw error;
+    }
+  }
+    /**
+   * Get account aggregates
+   */
+   async getAccountAggregates(
+    accountId: string, withTopVideos: boolean = false
+  ): Promise<
+    {accountAggregates: Tables<"accounts_aggregates"> | null, topVideos?: Tables<"tiktok_video_details">[] | null}
+  > {
+    try {
+      const { data, error } = await supabase
+        .from("accounts_aggregates")
+        .select("*")
+        .eq("account_id", accountId)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        logger.error("❌ Failed to get account aggregates:", error);
+        throw error;
+      }
+
+      if (withTopVideos) {
+        const rawTopVideos = topVideoByMetricSchema.safeParse(data?.top_videos);
+        const rawTopVideosIds = rawTopVideos.success ? rawTopVideos.data.by_views.map((video) => video.tiktok_video_id) : [];
+
+        const { data: tikTokVideos, error: tikTokVideosError } = await supabase
+          .from("tiktok_videos")
+          .select("id")
+          .in("tiktok_video_id", rawTopVideosIds)
+
+          if (tikTokVideosError) {
+            logger.error("❌ Failed to get tiktok videos:", tikTokVideosError);
+            throw tikTokVideosError;
+          }
+
+        const { data: topVideos, error: topVideosError } = await supabase
+          .from("tiktok_video_details")
+          .select("*")
+          .in("video_id", tikTokVideos.map((video) => video.id))
+          .order("last_scraped_at", { ascending: false })
+          .limit(10); 
+
+        if (topVideosError) {
+          logger.error("❌ Failed to get tiktok video details:", topVideosError);
+          throw topVideosError;
+        }
+
+        return {
+          accountAggregates: data,
+          topVideos: topVideos,
+        };
+
+      } else {  
+        return {
+          accountAggregates: data,
+        };
+      }
+    } catch (error) {
+      logger.error("❌ Failed to get account aggregates:", error);
+      throw error;
+    }
+  }
+
+    /**
+   * 🆕 Get the latest structured LLM insights for an account.
+   */
+   async getLatestLlmInsights(accountId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("accounts_llm_insights")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      logger.error("❌ Failed to get latest LLM insights:", error);
+      throw error;
+    }
+  }
+
+  async fetchTiktokAccountContext(accountId: string): Promise<{
+    account: TableRow<'accounts'> | null;
+    stats: TableRow<'accounts_stats'> | null;
+    aggregates: Tables<'accounts_aggregates'> | null;
+    top_videos: Tables<'tiktok_video_details'>[] | null;
+    insights: Tables<'accounts_llm_insights'> | null;
+  }> {
+    const [accountWithStats, accountAggregates, latestLlmInsights] = await Promise.allSettled([
+        this.getAccountWithStats(accountId),
+        this.getAccountAggregates(accountId, true),
+        this.getLatestLlmInsights(accountId),
+      ]);
+
+      let accountValue: TableRow<'accounts'> | null = null;
+      let accountStatsValue: TableRow<'accounts_stats'> | null = null;
+      let accountAggregatesValue: Tables<'accounts_aggregates'> | null = null;
+      let topVideosValue: Tables<'tiktok_video_details'>[] | null = null;
+      let latestLlmInsightsValue: Tables<'accounts_llm_insights'> | null = null;
+
+      if (accountWithStats.status === "fulfilled") {
+        accountValue = accountWithStats.value?.account || null;
+        accountStatsValue = accountWithStats.value?.stats || null;
+      } else {
+        this.logger.error("❌ Failed to get account with stats:", accountWithStats.reason);
+      }
+
+      if (accountAggregates.status === "fulfilled") {
+        accountAggregatesValue = accountAggregates.value?.accountAggregates || null;
+        topVideosValue = accountAggregates.value?.topVideos || null;
+      } else {
+        this.logger.error("❌ Failed to get account aggregates:", accountAggregates.reason);
+      }
+
+      if (latestLlmInsights.status === "fulfilled") {
+        latestLlmInsightsValue = latestLlmInsights.value;
+      } else {
+        this.logger.error("❌ Failed to get latest LLM insights:", latestLlmInsights.reason);
+      }
+
+      return {
+        account: accountValue,
+        stats: accountStatsValue,
+        aggregates: accountAggregatesValue,
+        top_videos: topVideosValue,
+        insights: latestLlmInsightsValue,
+      };
   }
 }

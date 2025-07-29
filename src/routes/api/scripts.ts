@@ -19,7 +19,7 @@ import { incrementResourceUsage } from "../../middleware/usageLimitMiddleware";
 import { ResourceType } from "../../types/ressource";
 import { GuardAgentService } from "../../services/script/GuardAgentService";
 import { User } from "../../types/user";
-import { isMonetizationError, MonetizationError, parseMonetizationError } from "editia-core/dist/services/monetization/monetization-service";
+import { isMonetizationError, MonetizationError, parseMonetizationError } from "editia-core";
 
 const scriptsLogger = logger.child({
   service: "scripts",
@@ -697,13 +697,12 @@ export async function generateVideoFromScriptHandler(
       );
     }
 
-    const videoGenerator = new VideoGeneratorService(user!);
+    const videoGenerator = new VideoGeneratorService(user!, generateVideoFromScriptHandlerLogger);
     const result = await videoGenerator.generateVideoFromScript(
       scriptDraft,
       validationResult.payload,
       generateVideoFromScriptHandlerLogger
     );
-    await incrementResourceUsage(user!.id, ResourceType.VIDEOS_GENERATED);
 
     generateVideoFromScriptHandlerLogger.info(
       "✅ Video generation from script initiated successfully"

@@ -1,0 +1,3 @@
+import { VIDEO_DURATION_MULTIPLIER } from "editia-core";
+
+export const VIDEO_DURATION_FACTOR = VIDEO_DURATION_MULTIPLIER;

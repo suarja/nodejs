@@ -1,0 +1,204 @@
+{
+  "id": "61dabaf9-5e26-432c-9489-3597cd2900c4",
+  "status": "succeeded",
+  "url": "https://f002.backblazeb2.com/file/creatomate-c8xg3hsxdu/61dabaf9-5e26-432c-9489-3597cd2900c4.mp4",
+  "snapshot_url": "https://f002.backblazeb2.com/file/creatomate-c8xg3hsxdu/61dabaf9-5e26-432c-9489-3597cd2900c4-snapshot.jpg",
+  "output_format": "mp4",
+  "render_scale": 1,
+  "width": 1080,
+  "height": 1920,
+  "frame_rate": 30,
+  "duration": 11.4,
+  "file_size": 10023105,
+  "modifications": {
+    "width": 1080,
+    "height": 1920,
+    "elements": [
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751911752010_IMG_3725.MOV",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-1",
+            "type": "audio",
+            "track": 3,
+            "source": "Tu me vois en vacances, mais tout ça vient du travail acharné.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=nTfwkJN1zZlaJj1EScTj"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#ffffff",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-1",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1753188463542_IMG_0007.MP4",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-2",
+            "type": "audio",
+            "track": 3,
+            "source": "Chaque choix, chaque effort, c'est ce qui te prépare à cette liberté.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=nTfwkJN1zZlaJj1EScTj"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#ffffff",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-2",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751883033921_IMG_0008.MP4",
+            "volume": 0,
+            "duration": null,
+            "trim_start": "0",
+            "trim_duration": "8"
+          },
+          {
+            "id": "voice-scene-3",
+            "type": "audio",
+            "track": 3,
+            "source": "L'automatisation m'a permis de dégager du temps.",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=nTfwkJN1zZlaJj1EScTj"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#ffffff",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-3",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      },
+      {
+        "type": "composition",
+        "track": 1,
+        "elements": [
+          {
+            "fit": "cover",
+            "type": "video",
+            "track": 1,
+            "source": "https://ai-edit-v1.s3.amazonaws.com/videos/f3d0be35-d766-4a4a-92bc-ae72614b9470/1751911752010_IMG_3725.MOV",
+            "volume": 0,
+            "duration": null
+          },
+          {
+            "id": "voice-scene-4",
+            "type": "audio",
+            "track": 3,
+            "source": "Alors, investis dans ta vie !",
+            "dynamic": true,
+            "provider": "elevenlabs model_id=eleven_multilingual_v2 voice_id=nTfwkJN1zZlaJj1EScTj"
+          },
+          {
+            "type": "text",
+            "track": 2,
+            "width": "90%",
+            "height": "100%",
+            "font_size": "8 vmin",
+            "fill_color": "#ffffff",
+            "font_family": "Montserrat",
+            "font_weight": "700",
+            "x_alignment": "50%",
+            "y_alignment": "90%",
+            "stroke_color": "#333333",
+            "stroke_width": "1.05 vmin",
+            "background_color": "rgba(216,216,216,0)",
+            "transcript_color": "#ffffff",
+            "transcript_effect": "highlight",
+            "transcript_source": "voice-scene-4",
+            "background_x_padding": "26%",
+            "background_y_padding": "7%",
+            "transcript_placement": "animate",
+            "background_border_radius": "28%",
+            "transcript_maximum_length": 25
+          }
+        ]
+      }
+    ],
+    "output_format": "mp4"
+  },
+  "webhook_url": "https://nodejs-production-a774.up.railway.app/api/webhooks/creatomate",
+  "metadata": "{\"requestId\":\"a71e3eb9-2618-4ac5-80b3-e02ea0ca2aba\",\"userId\":\"f3d0be35-d766-4a4a-92bc-ae72614b9470\",\"scriptId\":\"2c8f2b4d-2a2d-4d4c-85f6-fe33ea56d145\",\"prompt\":\"Video from script: Réduire la Durée des Vidéos\",\"timestamp\":\"2025-07-23T11:46:30.740Z\"}"
+}

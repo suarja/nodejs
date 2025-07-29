@@ -1,0 +1,72 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Bash(npm run *)",
+      "Bash(git *)",
+      "Bash(pnpm *)",
+      "Bash(gh *)",
+      "Bash(cd *)",
+      "Bash(ls *)",
+      "Bash(node *)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/context-analyzer.js"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/pre-edit-validator.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-edit-tracker.js"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /Users/swarecito/App/2025/editia/.claude/song/finish.mp3"
+          }
+  
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /Users/swarecito/App/2025/editia/.claude/song/need-human.mp3"
+          }
+        ]
+      }
+    ]
+  }
+}
