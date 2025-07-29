@@ -1,9 +1,10 @@
 {
-  "name": "nodejs-app",
+  "name": "Editia Primary Server",
   "version": "1.0.0",
   "description": "A Node.js web application with TypeScript for video generation API.",
   "main": "dist/app.js",
   "author": "alphasec",
+  "type": "module",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.825.0",
