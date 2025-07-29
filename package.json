@@ -4,7 +4,6 @@
   "description": "A Node.js web application with TypeScript for video generation API.",
   "main": "dist/app.js",
   "author": "alphasec",
-  "type": "module",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.825.0",
@@ -42,10 +41,10 @@
     "vitest": "^3.2.4"
   },
   "scripts": {
-    "start": "ts-node src/app.ts",
-    "dev": "npm run update-core && nodemon --exec ts-node src/app.ts",
+    "start": "node dist/app.js",
+    "dev": "npm run update-core && npm run build && node dist/app.js",
     "build": "tsc",
-    "dev:watch": "nodemon --watch src --ext ts --exec ts-node src/app.ts",
+    "dev:watch": "nodemon --watch src --ext ts --exec 'npm run build && node dist/app.js'",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "postbuild": "cp -r views public dist/ || true",

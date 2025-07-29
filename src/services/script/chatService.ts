@@ -17,12 +17,12 @@ import { Json } from "../../config/supabase-types";
 import winston from "winston";
 import { User } from "../../types/user";
 import { MonetizationService, MonetizationErrorCode, MONETIZATION_ERROR_CODES, MonetizationError, Database, TableRow, Tables } from "editia-core";
-import { Agent, run } from '@openai/agents';
+// Dynamic import for @openai/agents will be handled in the function
 import { z } from "zod";
 import { logger } from "../../config/logger";
 import { VIDEO_DURATION_FACTOR } from "../../config/video-constants";
 
-  const OutputSchema = z.object({
+const OutputSchema = z.object({
         script: z.string().describe("The script to be generated").nullable().optional(),
         hasScriptUpdate: z.boolean().describe("Whether the script has been updated"),
         conversation: z.string().describe("The conversation history"),
@@ -125,6 +125,9 @@ export class ScriptChatService {
         editorialProfile,
         tiktokContext
       );
+
+      // Dynamic import for @openai/agents
+      const { Agent, run } = await import('@openai/agents');
 
       const agent = new Agent({
         model: this.model,
