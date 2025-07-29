@@ -55,71 +55,87 @@ We've migrated from Jest to **Vitest** for better performance and modern tooling
 
 ## Testing Roadmap
 
+### 🚨 **CRITICAL ISSUE DISCOVERED**
+**Main video generation feature is completely broken** - the mobile app has the entire API call commented out in `useVideoRequest.ts:326-342`. This must be fixed before comprehensive testing.
+
 ### Phase 1: Core Validation ✅ **[COMPLETED]**
-- [x] Video Validation Service
+- [x] Video Validation Service (21 tests passing)
 - [x] Voice ID validation and auto-fixing
 - [x] Template structure validation
 - [x] Scene duration calculations
 
-### Phase 2: Service Layer **[NEXT - HIGH PRIORITY]**
+### Phase 2: Critical Path Testing **[URGENT - HIGHEST PRIORITY]**
 
-#### 2.1 Video Template Service
-- **File**: `src/services/video/template-service.ts`
-- **Priority**: HIGH
+Based on API audit findings, focus on endpoints that are actually used:
+
+#### 2.1 Video Generation Pipeline 🚨 **[BROKEN - FIX FIRST]**
+- **Endpoints**: `POST /api/scripts/generate-video/:id` (commented out in mobile)
+- **Services**: `VideoTemplateService`, `VideoValidationService`, `CreatomateBuilder`
+- **Priority**: **CRITICAL** (main feature is non-functional)
 - **Tests needed**:
-  - [ ] `generateTemplate()` method - Main orchestration flow
-  - [ ] Template generation with scene planning
-  - [ ] Error handling and retry logic
-  - [ ] Configuration validation
+  - [ ] Full script-to-video generation flow
+  - [ ] Error handling when mobile API call is restored
+  - [ ] Template validation integration
+  - [ ] Background processing reliability
 
-#### 2.2 Video Generator Service  
-- **File**: `src/services/video/generator.ts`
-- **Priority**: HIGH
+#### 2.2 Script Management **[HIGH PRIORITY]**
+- **Endpoints**: 6 active endpoints (GET, POST, DELETE /api/scripts/*)
+- **Files**: `src/routes/api/scripts.ts`
+- **Priority**: HIGH (core user interaction)
 - **Tests needed**:
-  - [ ] `generateVideoFromScript()` - Request handling
-  - [ ] Background processing logic
-  - [ ] Database state management
-  - [ ] Error recovery
+  - [ ] Script CRUD operations
+  - [ ] AI chat functionality (`scriptChatHandler`)
+  - [ ] Script modification (`modifyCurrentScriptHandler`)
+  - [ ] Integration with video generation
 
-#### 2.3 CreatomateBuilder
-- **File**: `src/services/creatomateBuilder.ts`
-- **Priority**: HIGH
+#### 2.3 Voice Cloning System **[HIGH PRIORITY]**
+- **Endpoints**: 3 active endpoints (/api/voice-clone, /api/onboarding)
+- **Files**: `src/routes/api/voiceClone.ts`, `src/routes/api/onboarding.ts`
+- **Priority**: HIGH (key differentiator)
 - **Tests needed**:
-  - [ ] Scene planning logic
-  - [ ] Template generation
-  - [ ] URL repair integration
-  - [ ] LLM response handling
+  - [ ] Voice sample upload and processing
+  - [ ] Voice library management
+  - [ ] Integration with video generation
+  - [ ] Voice ID validation (already tested in ValidationService)
 
-### Phase 3: Supporting Services **[MEDIUM PRIORITY]**
+### Phase 3: Supporting Features **[MEDIUM PRIORITY]**
 
-#### 3.1 Prompt Service
-- **File**: `src/services/promptService.ts`
+#### 3.1 Source Video Management
+- **Endpoints**: 4 active endpoints (/api/s3-upload, /api/source-videos)
+- **Files**: `src/routes/api/s3Upload.ts`, `src/routes/api/sourceVideos.ts`
+- **Priority**: MEDIUM (supporting video generation)
 - **Tests needed**:
-  - [ ] Template loading and parsing
-  - [ ] Variable substitution
-  - [ ] Error handling for missing templates
+  - [ ] S3 upload functionality
+  - [ ] Video metadata CRUD operations
+  - [ ] Integration with video generation pipeline
 
-#### 3.2 Usage Tracking Service
-- **File**: `src/services/usageTrackingService.ts`
+#### 3.2 Video Status & Management
+- **Endpoints**: 2 active endpoints (/api/videos/status, DELETE /api/videos)
+- **Files**: `src/routes/api/videos.ts`, `src/routes/api/videoDelete.ts`
+- **Priority**: MEDIUM (user experience)
 - **Tests needed**:
-  - [ ] Usage increment logic
-  - [ ] Limit validation
-  - [ ] Database operations
+  - [ ] Video status polling
+  - [ ] Video deletion workflow
+  - [ ] Status update mechanisms
 
-### Phase 4: Integration Tests **[LOWER PRIORITY]**
+### Phase 4: External Integrations **[LOWER PRIORITY]**
 
-#### 4.1 Video Generation Pipeline
-- **Purpose**: Test full video generation flow
+#### 4.1 Support & User Management
+- **Endpoints**: 2 active endpoints (/api/support, /api/user-management)
+- **Files**: `src/routes/api/support.ts`, `src/routes/api/userManagement.ts`
+- **Priority**: LOW (administrative features)
 - **Tests needed**:
-  - [ ] End-to-end script to template conversion
-  - [ ] Error propagation through pipeline
-  - [ ] Performance under load
+  - [ ] Issue reporting functionality
+  - [ ] User account deletion
+  - [ ] Data cleanup processes
 
-#### 4.2 API Endpoints
-- **Tests needed**:
-  - [ ] Authentication middleware
-  - [ ] Request validation
-  - [ ] Response formatting
+#### 4.2 Legacy & Deprecated Endpoints
+- **Status**: 10 deprecated endpoints identified
+- **Priority**: CLEANUP (remove unused code)
+- **Actions needed**:
+  - [ ] Remove deprecated prompt enhancement endpoints
+  - [ ] Clean up legacy video generation code
+  - [ ] Remove unused webhook endpoints
 
 ---
 
@@ -263,4 +279,104 @@ describe('ServiceUnderTest', () => {
 });
 ```
 
-This testing strategy ensures we maintain high code quality while focusing our efforts on the most critical parts of the video generation pipeline.
+## Complete Data Flow Overview
+
+### Mobile App → Server-Primary API Flow
+
+Based on comprehensive API audit, here's the actual data flow:
+
+#### **1. User Authentication Flow**
+```
+Mobile App → Clerk Authentication → Server-Primary API
+- All endpoints require Clerk JWT token
+- Authentication handled by editia-core middleware
+```
+
+#### **2. Script Management Flow (Working)**
+```
+Mobile: Script Chat UI → useScriptChat hook
+↓
+API: POST /api/scripts/chat → scriptChatHandler
+↓
+Database: script_drafts table updates
+↓
+Mobile: Real-time script updates
+```
+
+#### **3. Video Generation Flow (BROKEN)**
+```
+Mobile: Script Video Settings → useVideoRequest hook
+↓
+🚨 BROKEN: API call commented out (lines 326-342)
+↓
+Should be: POST /api/scripts/generate-video/:id
+↓
+Backend: generateVideoFromScriptHandler → VideoTemplateService
+↓
+ValidationService (3 phases) → CreatomateBuilder → Creatomate API
+```
+
+#### **4. Voice Cloning Flow (Working)**
+```
+Mobile: Voice Recording → voiceRecordingService
+↓
+API: POST /api/voice-clone → voiceCloneRouter
+↓
+ElevenLabs API integration
+↓
+Database: voice samples stored
+```
+
+#### **5. Source Video Management Flow (Working)**
+```
+Mobile: Video Upload → useSourceVideos hook
+↓
+API: POST /api/s3-upload → uploadS3Handler
+↓
+AWS S3 storage
+↓
+Database: videos table metadata
+```
+
+### Server-Primary Internal Flow
+
+#### **Video Template Generation (When Working)**
+```
+generateVideoFromScriptHandler
+↓
+VideoTemplateService.generateTemplate()
+├── Phase 1: validateInputConfiguration()
+├── Phase 2: CreatomateBuilder.planVideoStructure()
+├── Phase 3: validateAndRepairScenePlan()
+├── Phase 4: CreatomateBuilder.generateTemplate()
+├── Phase 5: Template fixes (audio, video, captions)
+└── Phase 6: validateTemplate() (final validation)
+↓
+Creatomate API render request
+↓
+Database: video_requests table updated
+```
+
+## API Audit Results Summary
+
+### **Active Endpoints (18 total)**
+- ✅ Script Management: 6 endpoints
+- ✅ Voice Cloning: 3 endpoints  
+- ✅ Source Videos: 4 endpoints
+- ✅ Video Management: 2 endpoints
+- ✅ User Support: 2 endpoints
+- 🚨 Video Generation: 1 endpoint (broken in mobile)
+
+### **Deprecated/Unused (10 total)**
+- Legacy prompt enhancement (3 endpoints)
+- Legacy video generation (1 endpoint)
+- Unused webhook (1 endpoint)
+- Unused analysis (1 endpoint)
+- Legacy Supabase functions (2 endpoints)
+- Duplicate TikTok endpoints (2 endpoints)
+
+### **Critical Issues**
+1. **Main feature completely broken** - Video generation API call commented out
+2. **URL path error** - TikTok active job endpoint missing /api prefix
+
+This testing strategy ensures we maintain high code quality while focusing our efforts on the critical parts that actually work and are used by the mobile application.

@@ -6,6 +6,14 @@ This document outlines the complete data and logic flow for the "Generate Video 
 
 The feature allows a user to select a pre-written script draft, choose source videos, and initiate a video generation process. The backend orchestrates a series of steps, including using multiple AI agents to plan the video structure, repair potential errors, and generate a final render-ready template for the Creatomate API.
 
+## 🚨 **CRITICAL ISSUE DISCOVERED**
+
+**The main video generation feature is completely broken** - during our API audit, we discovered that the entire video generation API call is commented out in the mobile app (`useVideoRequest.ts:326-342`). The function returns `true` without making any API request, meaning users cannot actually generate videos from scripts.
+
+**Status**: Backend pipeline is fully functional, but mobile app integration is disabled.
+**Impact**: Main value proposition is non-functional for users.
+**Action Required**: Uncomment and test the API call in the mobile app.
+
 ---
 
 ## Step-by-Step Data Flow
@@ -20,7 +28,7 @@ The process can be broken down into two main phases: the **Client-Side Request**
     - They select source videos and configure settings.
     - Pressing the "Generate Video" button triggers the `handleGenerateVideo` function.
 
-2.  **Request Handling (`useVideoRequest.ts`)**:
+2.  **Request Handling (`useVideoRequest.ts`) - 🚨 BROKEN**:
 
     - `handleGenerateVideo` calls the `handleSubmit` function from the `useVideoRequest` hook.
     - `handleSubmit` assembles a `requestPayload` containing:
@@ -29,10 +37,13 @@ The process can be broken down into two main phases: the **Client-Side Request**
       - Voice, caption, and editorial profile configurations.
       - The output language.
     - It retrieves a Clerk authentication token.
+    - **🚨 CRITICAL ISSUE**: The entire API call is commented out (lines 326-342)
+    - **Current behavior**: Function returns `true` without making any request
 
-3.  **API Call (`api.ts`)**:
-    - The hook makes a `POST` request to the endpoint defined by `API_ENDPOINTS.SCRIPT_GENERATE_VIDEO(scriptId)`.
-    - This resolves to the URL: `[SERVER_BASE_URL]/api/scripts/:id/generate-video`.
+3.  **API Call (`api.ts`) - SHOULD WORK WHEN UNCOMMENTED**:
+    - The hook SHOULD make a `POST` request to `API_ENDPOINTS.SCRIPT_GENERATE_VIDEO(scriptId)`.
+    - This SHOULD resolve to: `[SERVER_BASE_URL]/api/scripts/generate-video/:id`
+    - **Backend endpoint exists and is functional**
 
 ### 2. Server-Side Processing (Backend)
 
@@ -205,3 +216,69 @@ The modular architecture enables focused testing:
 - **E2E Tests**: Full pipeline validation
 
 This separation makes the codebase more maintainable and allows for targeted testing of critical validation logic.
+
+---
+
+## Complete API Ecosystem
+
+### Server-Primary API Endpoints (18 Active)
+
+Based on comprehensive API audit, here are the endpoints actually used by the mobile app:
+
+#### **Core Video Features**
+- `POST /api/scripts/generate-video/:id` - 🚨 BROKEN (commented out in mobile)
+- `GET /api/videos/status/:id` - ✅ Working (status polling)
+- `DELETE /api/videos` - ✅ Working (video deletion)
+
+#### **Script Management (6 endpoints)**
+- `GET /api/scripts` - List user scripts
+- `GET /api/scripts/:id` - Get specific script
+- `POST /api/scripts/chat` - AI chat with script
+- `POST /api/scripts/modify-current-script/:id` - AI script modification
+- `DELETE /api/scripts/:id` - Delete script
+- `POST /api/scripts/:id/duplicate` - Duplicate script
+
+#### **Voice Cloning (3 endpoints)**
+- `POST /api/voice-clone` - Voice cloning operations
+- `GET /api/voice-clone/user-voices` - Get user's voices
+- `POST /api/onboarding` - Process voice samples
+
+#### **Source Video Management (4 endpoints)**
+- `POST /api/s3-upload` - Upload videos to S3
+- `POST /api/source-videos` - Save video metadata
+- `GET /api/source-videos` - Get user's videos  
+- `PUT /api/source-videos/:videoId` - Update video info
+
+#### **Support & User Management (2 endpoints)**
+- `POST /api/support/report-issue` - Report issues
+- `DELETE /api/user-management/delete-user` - Delete account
+
+### Deprecated Endpoints (10 total)
+
+These endpoints are defined but not used by the mobile app:
+- Legacy video generation (`/api/videos/generate`)
+- Legacy prompt enhancement (3 endpoints)
+- Unused video analysis (`/api/video-analysis`)
+- Legacy Supabase functions (2 endpoints)
+- Various deprecated TikTok endpoints
+
+### Data Flow Dependencies
+
+#### **Working Data Flows**
+1. **Script Creation**: Mobile → Script API → Database
+2. **Voice Cloning**: Mobile → Voice API → ElevenLabs → Database
+3. **Video Upload**: Mobile → S3 API → AWS S3 → Database
+4. **Video Status**: Mobile → Status API → Database
+
+#### **Broken Data Flow**
+5. **Video Generation**: Mobile (BROKEN) → Should connect to → Video Generation API → VideoTemplateService → ValidationService → CreatomateBuilder → Creatomate API
+
+### Testing Implications
+
+The comprehensive API audit reveals:
+- **18 active endpoints** need testing
+- **1 critical broken flow** needs immediate fixing
+- **10 deprecated endpoints** can be removed
+- **Backend pipeline is fully functional** - issue is mobile integration only
+
+This documentation provides the complete picture of the current system state and the critical issue preventing the main feature from working.
