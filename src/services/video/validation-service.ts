@@ -155,7 +155,7 @@ export class VideoValidationService {
 
        // Step 5-7: Apply template fixes
     this.patchAudioTextToSource(template);
-    this.fixTemplate(template);
+    this.fixVideoElementType(template);
     this.handleCaptionConfiguration(template, config.captionStructure);
 
 
@@ -449,7 +449,7 @@ export class VideoValidationService {
    * Fix template properties like video.fit to 'cover'
    * Now PUBLIC for VideoTemplateService to call directly
    */
-  fixTemplate(template: any) {
+  fixVideoElementType(template: any) {
     // Fix the elements.video.fit to be cover and duration to be null
     template.elements.forEach((element: any) => {
       element.elements.forEach((element: any) => {

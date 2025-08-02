@@ -264,7 +264,6 @@ export class VideoGeneratorService {
         captionConfig,
         outputLanguage,
         editorialProfile,
-        systemPrompt,
       } = payload;
 
       // Step 1: Fetch and validate videos (same as original)
@@ -291,7 +290,6 @@ export class VideoGeneratorService {
         "Template generation timed out"
       );
 
-      // REMOVED: URL repair here - now handled in VideoTemplateService
 
       // Step 3: Store training data (fire and forget)
       this.storeTrainingDataAsync(
