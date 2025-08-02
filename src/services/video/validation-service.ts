@@ -11,6 +11,7 @@ import OpenAI from 'openai';
 import { VideoUrlRepairer } from './videoUrlRepairer';
 import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
 import { TemplateConfig } from './template-service';
+import { VIDEO_DURATION_FACTOR } from '../../config/video-constants';
 
 interface DurationViolation {
   sceneIndex: number;
@@ -188,7 +189,7 @@ export class VideoValidationService {
       
       // Use same 0.7 multiplier as frontend validation
       const textWordCount = scene.script_text.split(/\s+/).filter(word => word.length > 0).length;
-      const voiceoverDuration = textWordCount * 0.7;
+      const voiceoverDuration = textWordCount * VIDEO_DURATION_FACTOR;
       
       // Get video duration (use trim_duration if available, fallback to full duration)
       let videoDuration = 0;
