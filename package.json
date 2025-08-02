@@ -13,7 +13,7 @@
     "@google/genai": "^1.8.0",
     "@logtail/node": "^0.5.5",
     "@logtail/winston": "^0.5.5",
-    "@openai/agents": "^0.0.12",
+    "@openai/agents": "^0.0.14",
     "@supabase/supabase-js": "^2.50.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
