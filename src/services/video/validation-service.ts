@@ -445,7 +445,6 @@ export class VideoValidationService {
    * Now PUBLIC for VideoTemplateService to call directly
    */
   fixVideoElementType(template: any) {
-    console.log("🚧 Applying simplified video strategy to template 🚧");
     
     template.elements.forEach((composition: any) => {
       if (!composition.elements || !Array.isArray(composition.elements)) {
@@ -464,22 +463,17 @@ export class VideoValidationService {
         // Set time strategy: first video at 0, others at "auto"
         if (index === 0) {
           videoElement.time = 0;
-          console.log("🚧 First video: time set to 0 🚧");
         } else {
           videoElement.time = "auto";
-          console.log(`🚧 Video ${index + 1}: time set to "auto" 🚧`);
         }
         
         // Ensure volume is 0 (no interference with voiceover)
         videoElement.volume = 0;
         
-        console.log(`🚧 Video ${index + 1}: duration=null, fit=cover, volume=0 🚧`);
       });
       
-      console.log(`🚧 Processed ${videoElements.length} video elements in composition 🚧`);
     });
     
-    console.log("✅ Simplified video strategy applied to template");
   }
 
   /**
