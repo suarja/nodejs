@@ -11,7 +11,7 @@ import OpenAI from 'openai';
 import { VideoUrlRepairer } from './videoUrlRepairer';
 import { convertCaptionConfigToProperties } from '../../utils/video/preset-converter';
 import { TemplateConfig } from './template-service';
-import { VIDEO_DURATION_FACTOR } from '../../config/video-constants';
+import { VIDEO_DURATION_FACTOR, SAFETY_MARGIN } from '../../config/video-constants';
 
 interface DurationViolation {
   sceneIndex: number;
@@ -91,7 +91,7 @@ export class VideoValidationService {
 
   /**
    * Phase 2: Scene plan validation (after planning, before template generation)
-   * Validates and repairs scene plan including durations and URLs
+   * Simplified approach: Apply duration null strategy and validate URLs only
    */
   async validateAndRepairScenePlan(
     scenePlan: ScenePlan,
@@ -99,49 +99,15 @@ export class VideoValidationService {
     scriptText: string,
     logger: winston.Logger
   ): Promise<ScenePlan> {
-    let repairedPlan = scenePlan;
-
-    // Step 1: Duration validation with max 3 iterations
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      logger.info(`🔍 Scene duration validation attempt ${attempt}/3`);
-      
-      const violations = this.validateSceneDurations(repairedPlan, selectedVideos);
-      
-      if (violations.length === 0) {
-        logger.info(`✅ Scene duration validation passed on attempt ${attempt}`);
-        break;
-      }
-      
-      // Log violations for debugging
-      logger.warn(`⚠️ Found ${violations.length} duration violations:`, {
-        violations: violations.map(v => ({
-          scene: v.sceneIndex,
-          overage: `${v.overageSeconds.toFixed(1)}s`,
-          textLength: v.textLength,
-          videoLength: v.videoLength
-        }))
-      });
-      
-      if (attempt < 3) {
-        // Repair durations with AI
-        repairedPlan = await this.repairSceneDurationsWithAI(
-          repairedPlan,
-          violations,
-          scriptText,
-          selectedVideos,
-          logger
-        );
-      } else {
-        throw new Error(
-          `Scene duration validation failed after ${attempt} attempts. ` +
-          `${violations.length} scenes exceed video duration.`
-        );
-      }
-    }
-
-    // Step 2: URL validation
-    repairedPlan = await this.validateScenePlanUrls(repairedPlan, selectedVideos, logger);
-
+    logger.info(`🔍 Applying simplified validation strategy`);
+    
+    // Step 1: Apply simplified video strategy to all scenes
+    this.applySimplifiedVideoStrategy(scenePlan, logger);
+    
+    // Step 2: URL validation (keep this as it's important for Creatomate)
+    const repairedPlan = await this.validateScenePlanUrls(scenePlan, selectedVideos, logger);
+    
+    logger.info(`✅ Simplified validation completed - using duration: null strategy`);
     return repairedPlan;
   }
 
@@ -175,7 +141,35 @@ export class VideoValidationService {
   }
 
   /**
-   * Validate scene durations using 0.7 word multiplier logic
+   * Apply simplified video strategy: remove trim logic, let Creatomate handle duration
+   */
+  private applySimplifiedVideoStrategy(scenePlan: ScenePlan, logger: winston.Logger): void {
+    logger.info(`🚧 Applying simplified video strategy to ${scenePlan.scenes.length} scenes`);
+    
+    for (let i = 0; i < scenePlan.scenes.length; i++) {
+      const scene = scenePlan.scenes[i];
+      
+      if (!scene?.video_asset) {
+        continue;
+      }
+      
+      // Remove trim properties to let Creatomate handle duration automatically
+      if (scene.video_asset.trim_start !== undefined) {
+        logger.info(`🚧 Scene ${i + 1}: Removing trim_start (${scene.video_asset.trim_start})`);
+        delete scene.video_asset.trim_start;
+      }
+      
+      if (scene.video_asset.trim_duration !== undefined) {
+        logger.info(`🚧 Scene ${i + 1}: Removing trim_duration (${scene.video_asset.trim_duration})`);
+        delete scene.video_asset.trim_duration;
+      }
+    }
+    
+    logger.info(`✅ Simplified video strategy applied - Creatomate will handle duration automatically`);
+  }
+
+  /**
+   * Legacy duration validation - kept for reference but simplified approach doesn't use this
    */
   private validateSceneDurations(scenePlan: ScenePlan, selectedVideos?: VideoType[]): DurationViolation[] {
     const violations: DurationViolation[] = [];
@@ -447,25 +441,45 @@ export class VideoValidationService {
     });
   }
     /**
-   * Fix template properties like video.fit to 'cover'
+   * Apply simplified video strategy to template: duration null + time auto
    * Now PUBLIC for VideoTemplateService to call directly
    */
   fixVideoElementType(template: any) {
-    // Fix the elements.video.fit to be cover and duration to be null
-    template.elements.forEach((element: any) => {
-      element.elements.forEach((element: any) => {
-        if (element.type === "video") {
-          console.log("🚧 Fixing video.fit to cover 🚧");
-          element.fit = "cover";
-
-          // Ensure video duration is null to limit video to caption/voiceover length
-          console.log(
-            "🚧 Setting video.duration to null for TikTok optimization 🚧"
-          );
-          element.duration = null;
+    console.log("🚧 Applying simplified video strategy to template 🚧");
+    
+    template.elements.forEach((composition: any) => {
+      if (!composition.elements || !Array.isArray(composition.elements)) {
+        return;
+      }
+      
+      const videoElements = composition.elements.filter((el: any) => el.type === "video");
+      
+      videoElements.forEach((videoElement: any, index: number) => {
+        // Always set fit to cover
+        videoElement.fit = "cover";
+        
+        // Always set duration to null (let Creatomate sync with voiceover)
+        videoElement.duration = null;
+        
+        // Set time strategy: first video at 0, others at "auto"
+        if (index === 0) {
+          videoElement.time = 0;
+          console.log("🚧 First video: time set to 0 🚧");
+        } else {
+          videoElement.time = "auto";
+          console.log(`🚧 Video ${index + 1}: time set to "auto" 🚧`);
         }
+        
+        // Ensure volume is 0 (no interference with voiceover)
+        videoElement.volume = 0;
+        
+        console.log(`🚧 Video ${index + 1}: duration=null, fit=cover, volume=0 🚧`);
       });
+      
+      console.log(`🚧 Processed ${videoElements.length} video elements in composition 🚧`);
     });
+    
+    console.log("✅ Simplified video strategy applied to template");
   }
 
   /**
